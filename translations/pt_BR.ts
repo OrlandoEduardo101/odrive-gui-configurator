@@ -1714,6 +1714,62 @@ Detalhes: {0}</translation>
         <source>&lt;b&gt;WARNING:&lt;/b&gt; You are about to erase &lt;b&gt;ALL&lt;/b&gt; settings on the ODrive and restore them to factory defaults.&lt;br&gt;&lt;br&gt;This action is irreversible and requires a reboot upon completion.&lt;br&gt;&lt;br&gt;Do you wish to continue?</source>
         <translation>&lt;b&gt;AVISO:&lt;/b&gt; Você está prestes a apagar &lt;b&gt;TODAS&lt;/b&gt; as configurações do ODrive e restaurá-las para os padrões de fábrica.&lt;br&gt;&lt;br&gt;Esta ação é irreversível e requer uma reinicialização após a conclusão.&lt;br&gt;&lt;br&gt;Deseja continuar?</translation>
     </message>
+    <message>
+        <source>Kt Measurement</source>
+        <translation>Medição de Kt</translation>
+    </message>
+    <message>
+        <source>Enter CLOSED LOOP (Axis 0)</source>
+        <translation>Entrar em MALHA FECHADA (Eixo 0)</translation>
+    </message>
+    <message>
+        <source>Puts Axis 0 in CLOSED_LOOP_CONTROL. Requires a calibrated motor and a ready encoder.</source>
+        <translation>Coloca o Eixo 0 em CONTROLE EM MALHA FECHADA. Requer motor calibrado e encoder pronto.</translation>
+    </message>
+    <message>
+        <source>Puts Axis 0 in IDLE state. Required to save configuration, and aborts an ongoing calibration.</source>
+        <translation>Coloca o Eixo 0 em estado OCIOSO. Necessário para salvar a configuração, e aborta uma calibração em andamento.</translation>
+    </message>
+    <message>
+        <source>The motor is not calibrated.
+
+Run the motor calibration on the &apos;Motor&apos; tab before entering closed loop.</source>
+        <translation>O motor não está calibrado.
+
+Execute a calibração do motor na aba &apos;Motor&apos; antes de entrar em malha fechada.</translation>
+    </message>
+    <message>
+        <source>The encoder is not ready.
+
+Run the encoder calibration on the &apos;Encoder&apos; tab before entering closed loop.</source>
+        <translation>O encoder não está pronto.
+
+Execute a calibração do encoder na aba &apos;Encoder&apos; antes de entrar em malha fechada.</translation>
+    </message>
+    <message>
+        <source>Axis 0 is in CLOSED LOOP CONTROL.</source>
+        <translation>Eixo 0 em CONTROLE EM MALHA FECHADA.</translation>
+    </message>
+    <message>
+        <source>Axis 0 did not stay in closed loop. Click &apos;Show Errors&apos; for details.</source>
+        <translation>O Eixo 0 não permaneceu em malha fechada. Clique em &apos;Mostrar Erros&apos; para detalhes.</translation>
+    </message>
+    <message>
+        <source>Could not read the axis state.
+
+Details: {0}</source>
+        <translation>Não foi possível ler o estado do eixo.
+
+Detalhes: {0}</translation>
+    </message>
+    <message>
+        <source>Alignment</source>
+        <translation>Alinhamento</translation>
+    </message>
+    <message>
+        <source>Tuning</source>
+        <translation>Ajustes</translation>
+    </message>
 </context>
 <context>
     <name>TerminalTab</name>
@@ -1756,6 +1812,810 @@ Detalhes: {0}</translation>
         <location filename="../tabs/terminal_tab.py" line="150"/>
         <source>! Error Output: {}</source>
         <translation>! Saída de Erro: {}</translation>
+    </message>
+</context>
+<context>
+    <name>TuningTab</name>
+    <message>
+        <source>Measurement Setup</source>
+        <translation>Configuração da Medição</translation>
+    </message>
+    <message>
+        <source>Method:</source>
+        <translation>Método:</translation>
+    </message>
+    <message>
+        <source>Radius / Arm length (mm):</source>
+        <translation>Raio / Comprimento da haste (mm):</translation>
+    </message>
+    <message>
+        <source>Arm angle from horizontal:</source>
+        <translation>Ângulo da haste em relação à horizontal:</translation>
+    </message>
+    <message>
+        <source>Rigid arm on a scale</source>
+        <translation>Haste rígida sobre uma balança</translation>
+    </message>
+    <message>
+        <source>Weight hanging at a known radius</source>
+        <translation>Peso pendurado em um raio conhecido</translation>
+    </message>
+    <message>
+        <source>Distance from the shaft centre to where the force is applied, in millimetres.</source>
+        <translation>Distância do centro do eixo até onde a força é aplicada, em milímetros.</translation>
+    </message>
+    <message>
+        <source>0° means the arm is horizontal, which gives the full torque.
+Any tilt reduces the effective lever by cos(angle).</source>
+        <translation>0° significa haste na horizontal, o que dá o torque total.
+Qualquer inclinação reduz a alavanca efetiva por cos(ângulo).</translation>
+    </message>
+    <message>
+        <source>Capture Points</source>
+        <translation>Capturar Pontos</translation>
+    </message>
+    <message>
+        <source>Measured current (Iq):</source>
+        <translation>Corrente medida (Iq):</translation>
+    </message>
+    <message>
+        <source>Mass (kg):</source>
+        <translation>Massa (kg):</translation>
+    </message>
+    <message>
+        <source>Capture Point</source>
+        <translation>Capturar Ponto</translation>
+    </message>
+    <message>
+        <source>Remove Selected</source>
+        <translation>Remover Selecionado</translation>
+    </message>
+    <message>
+        <source>Clear All</source>
+        <translation>Limpar Tudo</translation>
+    </message>
+    <message>
+        <source>Records the typed mass together with the averaged current reading.</source>
+        <translation>Registra a massa digitada junto com a leitura média da corrente.</translation>
+    </message>
+    <message>
+        <source>Total mass hanging on the arm for this point.</source>
+        <translation>Massa total pendurada na haste para este ponto.</translation>
+    </message>
+    <message>
+        <source>Mass (kg)</source>
+        <translation>Massa (kg)</translation>
+    </message>
+    <message>
+        <source>Torque (Nm)</source>
+        <translation>Torque (Nm)</translation>
+    </message>
+    <message>
+        <source>Iq (A)</source>
+        <translation>Iq (A)</translation>
+    </message>
+    <message>
+        <source>Result</source>
+        <translation>Resultado</translation>
+    </message>
+    <message>
+        <source>Apply Kt to ODrive</source>
+        <translation>Aplicar Kt na ODrive</translation>
+    </message>
+    <message>
+        <source>Writes the measured value to axis0.motor.config.torque_constant.</source>
+        <translation>Grava o valor medido em axis0.motor.config.torque_constant.</translation>
+    </message>
+    <message>
+        <source>Clamp a rigid arm to the shaft and rest its far end on a kitchen scale. The radius is the distance from the shaft centre to the contact point on the scale. Keep the arm horizontal, and subtract nothing for the arm&apos;s own weight: capturing two or more points cancels it automatically.</source>
+        <translation>Prenda uma haste rígida no eixo e apoie a ponta dela numa balança de cozinha. O raio é a distância do centro do eixo até o ponto de contato na balança. Mantenha a haste na horizontal, e não desconte nada pelo peso da própria haste: capturar dois ou mais pontos cancela isso automaticamente.</translation>
+    </message>
+    <message>
+        <source>Hang the weight from a known radius on the wheel, with the hanging point level with the shaft (the 3 or 9 o&apos;clock position). Best accuracy comes from running the cord tangentially over the rim, since then the torque does not depend on the angle at all.</source>
+        <translation>Pendure o peso num raio conhecido do volante, com o ponto de suspensão na altura do eixo (posição de 3 ou 9 horas). A melhor precisão vem de passar o cordão tangencialmente sobre o aro, pois aí o torque não depende do ângulo.</translation>
+    </message>
+    <message>
+        <source>{0:.3f} A</source>
+        <translation>{0:.3f} A</translation>
+    </message>
+    <message>
+        <source>Input Error</source>
+        <translation>Erro de Entrada</translation>
+    </message>
+    <message>
+        <source>Enter a valid radius before capturing points.</source>
+        <translation>Informe um raio válido antes de capturar pontos.</translation>
+    </message>
+    <message>
+        <source>Enter the mass for this point, in kilograms.</source>
+        <translation>Informe a massa deste ponto, em quilogramas.</translation>
+    </message>
+    <message>
+        <source>The mass cannot be negative.</source>
+        <translation>A massa não pode ser negativa.</translation>
+    </message>
+    <message>
+        <source>No Reading</source>
+        <translation>Sem Leitura</translation>
+    </message>
+    <message>
+        <source>No current reading available.
+
+Connect to the ODrive and put Axis 0 in closed loop so it holds the load.</source>
+        <translation>Nenhuma leitura de corrente disponível.
+
+Conecte na ODrive e coloque o Eixo 0 em malha fechada para que ele segure a carga.</translation>
+    </message>
+    <message>
+        <source>Enter the radius to start.</source>
+        <translation>Informe o raio para começar.</translation>
+    </message>
+    <message>
+        <source>Capture at least two points with different masses.</source>
+        <translation>Capture ao menos dois pontos com massas diferentes.</translation>
+    </message>
+    <message>
+        <source>The measured current is zero. Is the motor holding the load?</source>
+        <translation>A corrente medida é zero. O motor está segurando a carga?</translation>
+    </message>
+    <message>
+        <source>Kt (single point): {0:.4f} Nm/A</source>
+        <translation>Kt (ponto único): {0:.4f} Nm/A</translation>
+    </message>
+    <message>
+        <source>Single-point result. It still includes the arm&apos;s own weight and friction. Capture another point with a different mass for a reliable value.</source>
+        <translation>Resultado de ponto único. Ele ainda inclui o peso da própria haste e o atrito. Capture outro ponto com massa diferente para um valor confiável.</translation>
+    </message>
+    <message>
+        <source>Every point has the same current. Vary the mass between captures.</source>
+        <translation>Todos os pontos têm a mesma corrente. Varie a massa entre as capturas.</translation>
+    </message>
+    <message>
+        <source>Kt (slope of {0} points): {1:.4f} Nm/A</source>
+        <translation>Kt (inclinação de {0} pontos): {1:.4f} Nm/A</translation>
+    </message>
+    <message>
+        <source>The slope came out negative, which is not physically valid. Check that the current rises as you add mass, and that every point used the same direction.</source>
+        <translation>A inclinação saiu negativa, o que não é fisicamente válido. Verifique se a corrente sobe conforme você adiciona massa, e se todos os pontos usaram o mesmo sentido.</translation>
+    </message>
+    <message>
+        <source>Fit quality R² = {0:.4f}. Offset absorbed: {1:.3f} Nm.</source>
+        <translation>Qualidade do ajuste R² = {0:.4f}. Offset absorvido: {1:.3f} Nm.</translation>
+    </message>
+    <message>
+        <source>R² below 0.98 means the points do not lie on a line. Treat this value as unreliable.</source>
+        <translation>R² abaixo de 0,98 significa que os pontos não estão alinhados numa reta. Trate este valor como não confiável.</translation>
+    </message>
+    <message>
+        <source>Currently on the ODrive: not connected.</source>
+        <translation>Atualmente na ODrive: não conectado.</translation>
+    </message>
+    <message>
+        <source>Currently on the ODrive: {0:.4f} Nm/A</source>
+        <translation>Atualmente na ODrive: {0:.4f} Nm/A</translation>
+    </message>
+    <message>
+        <source>Currently on the ODrive: could not read.</source>
+        <translation>Atualmente na ODrive: não foi possível ler.</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>Write Kt = {0:.4f} Nm/A to axis0.motor.config.torque_constant?
+
+A lower value makes the ODrive command more current for the same requested torque, which heats the motor.</source>
+        <translation>Gravar Kt = {0:.4f} Nm/A em axis0.motor.config.torque_constant?
+
+Um valor menor faz a ODrive comandar mais corrente para o mesmo torque pedido, o que aquece o motor.</translation>
+    </message>
+    <message>
+        <source>Torque constant applied.</source>
+        <translation>Constante de torque aplicada.</translation>
+    </message>
+    <message>
+        <source>Reminder</source>
+        <translation>Lembrete</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Erro</translation>
+    </message>
+    <message>
+        <source>Error applying torque constant: {}</source>
+        <translation>Erro ao aplicar a constante de torque: {}</translation>
+    </message>
+    <message>
+        <source>{0:.3f} A  (settling {1}/{2})</source>
+        <translation>{0:.3f} A  (estabilizando {1}/{2})</translation>
+    </message>
+    <message>
+        <source>{0:.3f} A  (still moving)</source>
+        <translation>{0:.3f} A  (ainda variando)</translation>
+    </message>
+    <message>
+        <source>No settled current reading yet.
+
+Connect to the ODrive, put Axis 0 in closed loop so it holds the load, and wait for the reading to fill up.</source>
+        <translation>Ainda não há uma leitura de corrente estabilizada.
+
+Conecte na ODrive, coloque o Eixo 0 em malha fechada para que ele segure a carga, e aguarde a leitura completar.</translation>
+    </message>
+</context>
+<context>
+    <name>AlignmentTab</name>
+    <message>
+        <source>ODrive&apos;s offset calibration pushes the rotor against cogging and friction, so on a direct drive motor it can settle a few electrical degrees off. That error wastes current as heat without producing torque. This sweep spins the motor with no load at many candidate offsets and keeps the one that needs the least current.</source>
+        <translation>A calibração de offset da ODrive empurra o rotor contra o cogging e o atrito, então num motor direct drive ela pode parar alguns graus elétricos fora. Esse erro desperdiça corrente em forma de calor sem produzir torque. Esta varredura gira o motor sem carga em vários offsets candidatos e fica com o que precisa de menos corrente.</translation>
+    </message>
+    <message>
+        <source>Sweep Parameters</source>
+        <translation>Parâmetros da Varredura</translation>
+    </message>
+    <message>
+        <source>Test velocity:</source>
+        <translation>Velocidade de teste:</translation>
+    </message>
+    <message>
+        <source>Current limit during sweep:</source>
+        <translation>Limite de corrente durante a varredura:</translation>
+    </message>
+    <message>
+        <source>Coarse points:</source>
+        <translation>Pontos da varredura grossa:</translation>
+    </message>
+    <message>
+        <source>Fine points:</source>
+        <translation>Pontos da varredura fina:</translation>
+    </message>
+    <message>
+        <source>Revolutions sampled per point:</source>
+        <translation>Voltas amostradas por ponto:</translation>
+    </message>
+    <message>
+        <source>Settle time per point:</source>
+        <translation>Tempo de estabilização por ponto:</translation>
+    </message>
+    <message>
+        <source>Speed the motor spins at while each offset is scored.</source>
+        <translation>Velocidade em que o motor gira enquanto cada offset é avaliado.</translation>
+    </message>
+    <message>
+        <source>Temporarily replaces the motor current limit during the sweep.
+Keep it low: badly commutated offsets will draw whatever is allowed.</source>
+        <translation>Substitui temporariamente o limite de corrente do motor durante a varredura.
+Mantenha baixo: offsets mal comutados vão puxar tudo que for permitido.</translation>
+    </message>
+    <message>
+        <source>How many offsets are tested across one full electrical revolution.</source>
+        <translation>Quantos offsets são testados ao longo de uma revolução elétrica completa.</translation>
+    </message>
+    <message>
+        <source>Extra points tested around the coarse winner.</source>
+        <translation>Pontos extras testados em torno do vencedor da varredura grossa.</translation>
+    </message>
+    <message>
+        <source>Sampling over whole mechanical revolutions averages cogging out.</source>
+        <translation>Amostrar em voltas mecânicas inteiras faz a média do cogging dar zero.</translation>
+    </message>
+    <message>
+        <source>Time to let the speed stabilise before sampling starts.</source>
+        <translation>Tempo para a velocidade estabilizar antes de começar a amostragem.</translation>
+    </message>
+    <message>
+        <source>The motor will spin on its own, in both directions, including at badly commutated offsets where it jerks and draws current. Free the shaft and remove anything attached to the wheel before starting.</source>
+        <translation>O motor vai girar sozinho, nos dois sentidos, inclusive em offsets mal comutados onde ele solavanca e puxa corrente. Libere o eixo e retire tudo que estiver preso ao volante antes de começar.</translation>
+    </message>
+    <message>
+        <source>Start Alignment Sweep</source>
+        <translation>Iniciar Varredura de Alinhamento</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>The motor is about to spin unattended in both directions for several minutes.
+
+Is the shaft free and clear?</source>
+        <translation>O motor vai girar sozinho nos dois sentidos por vários minutos.
+
+O eixo está livre e desobstruído?</translation>
+    </message>
+    <message>
+        <source>Cancelling, restoring the drive...</source>
+        <translation>Cancelando, restaurando o drive...</translation>
+    </message>
+    <message>
+        <source>Alignment complete.</source>
+        <translation>Alinhamento concluído.</translation>
+    </message>
+    <message>
+        <source>Alignment Complete</source>
+        <translation>Alinhamento Concluído</translation>
+    </message>
+    <message>
+        <source>Alignment did not complete.</source>
+        <translation>O alinhamento não foi concluído.</translation>
+    </message>
+    <message>
+        <source>Alignment Failed</source>
+        <translation>Falha no Alinhamento</translation>
+    </message>
+    <message>
+        <source>Estimated duration: about {0:.0f} min {1:.0f} s ({2} measurements)</source>
+        <translation>Duração estimada: cerca de {0:.0f} min {1:.0f} s ({2} medições)</translation>
+    </message>
+    <message>
+        <source>Action Required</source>
+        <translation>Ação Necessária</translation>
+    </message>
+    <message>
+        <source>The motor is not calibrated.
+
+Run the motor calibration first.</source>
+        <translation>O motor não está calibrado.
+
+Execute a calibração do motor primeiro.</translation>
+    </message>
+    <message>
+        <source>The encoder is not ready.
+
+Run the encoder calibration first.</source>
+        <translation>O encoder não está pronto.
+
+Execute a calibração do encoder primeiro.</translation>
+    </message>
+    <message>
+        <source>Index Not Enabled</source>
+        <translation>Índice Não Habilitado</translation>
+    </message>
+    <message>
+        <source>This encoder is not set to use the Z index.
+
+Without it the offset is recalculated on every boot, so the value found here cannot be saved permanently.
+
+Run the sweep anyway?</source>
+        <translation>Este encoder não está configurado para usar o índice Z.
+
+Sem ele o offset é recalculado a cada boot, então o valor encontrado aqui não pode ser salvo permanentemente.
+
+Executar a varredura mesmo assim?</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Erro</translation>
+    </message>
+    <message>
+        <source>Could not read the axis state.
+
+Details: {0}</source>
+        <translation>Não foi possível ler o estado do eixo.
+
+Detalhes: {0}</translation>
+    </message>
+</context>
+<context>
+    <name>OffsetAlignmentWorker</name>
+    <message>
+        <source>Could not find the electrical offset property on this firmware.
+
+Looked for encoder.config.offset and motor.config.phase_offset.</source>
+        <translation>Não foi possível encontrar a propriedade de offset elétrico neste firmware.
+
+Foram procuradas encoder.config.offset e motor.config.phase_offset.</translation>
+    </message>
+    <message>
+        <source>Encoder CPR and pole pairs must both be positive.</source>
+        <translation>O CPR do encoder e os pares de polos precisam ser ambos positivos.</translation>
+    </message>
+    <message>
+        <source>Already applied to the running session. Use &apos;Save Configuration&apos; to keep it.
+
+Note: the offset only survives a reboot when the encoder uses the Z index with pre-calibrated enabled.</source>
+        <translation>Já aplicado à sessão atual. Use &apos;Salvar Configuração&apos; para gravar.
+
+Observação: o offset só sobrevive a um reboot quando o encoder usa o índice Z com pre-calibrated habilitado.</translation>
+    </message>
+    <message>
+        <source>Coarse sweep (forward)</source>
+        <translation>Varredura grossa (sentido horário)</translation>
+    </message>
+    <message>
+        <source>Coarse sweep (reverse)</source>
+        <translation>Varredura grossa (sentido anti-horário)</translation>
+    </message>
+    <message>
+        <source>Fine sweep (forward)</source>
+        <translation>Varredura fina (sentido horário)</translation>
+    </message>
+    <message>
+        <source>Fine sweep (reverse)</source>
+        <translation>Varredura fina (sentido anti-horário)</translation>
+    </message>
+    <message>
+        <source>Sweep cancelled. The original offset was restored.</source>
+        <translation>Varredura cancelada. O offset original foi restaurado.</translation>
+    </message>
+    <message>
+        <source>Connection to the ODrive was lost during the sweep.</source>
+        <translation>A conexão com a ODrive foi perdida durante a varredura.</translation>
+    </message>
+    <message>
+        <source>{0}: offset {1} ({2}/{3})</source>
+        <translation>{0}: offset {1} ({2}/{3})</translation>
+    </message>
+    <message>
+        <source>Best alignment found: {0}</source>
+        <translation>Melhor alinhamento encontrado: {0}</translation>
+    </message>
+    <message>
+        <source>Calibration had left {0}.</source>
+        <translation>A calibração tinha deixado {0}.</translation>
+    </message>
+    <message>
+        <source>Difference: {0} counts = {1:.1f} electrical degrees, which was costing about {2:.1f}% of torque.</source>
+        <translation>Diferença: {0} contas = {1:.1f} graus elétricos, o que representava cerca de {2:.1f}% de torque perdido.</translation>
+    </message>
+    <message>
+        <source>Could not read encoder CPR or pole pairs: {0}</source>
+        <translation>Não foi possível ler o CPR do encoder ou os pares de polos: {0}</translation>
+    </message>
+    <message>
+        <source>Current there: {0:.2f} A (worst point tested: {1:.2f} A)</source>
+        <translation>Corrente nesse ponto: {0:.2f} A (pior ponto testado: {1:.2f} A)</translation>
+    </message>
+    <message>
+        <source>The sweep failed: {0}
+
+The original offset was restored.</source>
+        <translation>A varredura falhou: {0}
+
+O offset original foi restaurado.</translation>
+    </message>
+</context>
+<context>
+    <name>TuningContainer</name>
+    <message>
+        <source>Kt Measurement</source>
+        <translation>Medição de Kt</translation>
+    </message>
+    <message>
+        <source>Alignment</source>
+        <translation>Alinhamento</translation>
+    </message>
+    <message>
+        <source>Safety</source>
+        <translation>Segurança</translation>
+    </message>
+    <message>
+        <source>FFB Preset</source>
+        <translation>Preset FFB</translation>
+    </message>
+</context>
+<context>
+    <name>SafetyTab</name>
+    <message>
+        <source>Live Temperatures</source>
+        <translation>Temperaturas ao Vivo</translation>
+    </message>
+    <message>
+        <source>Board (FET):</source>
+        <translation>Placa (FET):</translation>
+    </message>
+    <message>
+        <source>Motor:</source>
+        <translation>Motor:</translation>
+    </message>
+    <message>
+        <source>Thermal Limits</source>
+        <translation>Limites Térmicos</translation>
+    </message>
+    <message>
+        <source>Between the lower and upper limit the ODrive reduces the current gradually. Above the upper limit it faults and disarms. On a wheel that band matters: a hard cutoff mid-corner makes the wheel go limp without warning, while the ramp lets the force fade in a way you can feel coming.</source>
+        <translation>Entre o limite inferior e o superior a ODrive reduz a corrente gradualmente. Acima do superior ela dá erro e desarma. Num volante essa faixa importa: um corte seco no meio da curva deixa o volante mole sem aviso, enquanto a rampa faz a força sumir de um jeito que você sente chegando.</translation>
+    </message>
+    <message>
+        <source>Board derate starts at:</source>
+        <translation>Redução na placa começa em:</translation>
+    </message>
+    <message>
+        <source>Board fault at:</source>
+        <translation>Erro na placa em:</translation>
+    </message>
+    <message>
+        <source>Enable motor thermistor (needs an NTC wired to a GPIO)</source>
+        <translation>Habilitar termistor do motor (precisa de um NTC ligado a um GPIO)</translation>
+    </message>
+    <message>
+        <source>Motor derate starts at:</source>
+        <translation>Redução no motor começa em:</translation>
+    </message>
+    <message>
+        <source>Motor fault at:</source>
+        <translation>Erro no motor em:</translation>
+    </message>
+    <message>
+        <source>The board sensor only measures the power stage. Only an NTC on the winding measures the copper that actually burns.</source>
+        <translation>O sensor da placa só mede o estágio de potência. Só um NTC no enrolamento mede o cobre que realmente queima.</translation>
+    </message>
+    <message>
+        <source>Torque Ceiling</source>
+        <translation>Teto de Torque</translation>
+    </message>
+    <message>
+        <source>A ceiling in Nm is only meaningful once the torque constant is correct, since the ODrive converts it to current by dividing by Kt.</source>
+        <translation>Um teto em Nm só faz sentido depois que a constante de torque está correta, já que a ODrive converte para corrente dividindo por Kt.</translation>
+    </message>
+    <message>
+        <source>No torque limit (firmware default)</source>
+        <translation>Sem limite de torque (padrão do firmware)</translation>
+    </message>
+    <message>
+        <source>Maximum torque:</source>
+        <translation>Torque máximo:</translation>
+    </message>
+    <message>
+        <source>Control Watchdog</source>
+        <translation>Watchdog de Controle</translation>
+    </message>
+    <message>
+        <source>Disarms the axis when no command arrives within the timeout, so a dropped CAN link cannot leave the wheel holding torque against you.
+
+Safe with OpenFFBoard over CAN: ODrive firmware feeds the watchdog on every CAN message it receives, and the board sends a torque command every cycle. Pick a timeout well above that period. If you drive the ODrive some other way, confirm it sends something periodically before enabling this.</source>
+        <translation>Desarma o eixo quando nenhum comando chega dentro do tempo limite, para que uma queda do CAN não deixe o volante aplicando torque contra você.
+
+Seguro com OpenFFBoard via CAN: o firmware da ODrive alimenta o watchdog a cada mensagem CAN recebida, e a placa envia um comando de torque a cada ciclo. Escolha um tempo limite bem acima desse período. Se você controla a ODrive de outra forma, confirme que ela envia algo periodicamente antes de habilitar isto.</translation>
+    </message>
+    <message>
+        <source>Enable watchdog</source>
+        <translation>Habilitar watchdog</translation>
+    </message>
+    <message>
+        <source>Timeout:</source>
+        <translation>Tempo limite:</translation>
+    </message>
+    <message>
+        <source>Bus Overvoltage Ramp</source>
+        <translation>Rampa de Sobretensão do Barramento</translation>
+    </message>
+    <message>
+        <source>Limits regeneration progressively as the bus voltage climbs, instead of waiting for the trip level to disarm everything. Set the end below the trip level so the ramp acts first.
+
+This cannot protect against a brake resistor that has failed open: the ODrive has no way to detect that, and the trip level stays the only backstop.</source>
+        <translation>Limita a regeneração progressivamente conforme a tensão do barramento sobe, em vez de esperar o nível de corte desarmar tudo. Ajuste o fim abaixo do nível de corte para que a rampa aja primeiro.
+
+Isto não protege contra um resistor de frenagem que abriu: a ODrive não tem como detectar isso, e o nível de corte continua sendo o único recurso.</translation>
+    </message>
+    <message>
+        <source>Enable overvoltage ramp</source>
+        <translation>Habilitar rampa de sobretensão</translation>
+    </message>
+    <message>
+        <source>Start limiting at:</source>
+        <translation>Começar a limitar em:</translation>
+    </message>
+    <message>
+        <source>Fully limited at:</source>
+        <translation>Totalmente limitado em:</translation>
+    </message>
+    <message>
+        <source>Apply Safety Settings</source>
+        <translation>Aplicar Configurações de Segurança</translation>
+    </message>
+    <message>
+        <source>Reminder</source>
+        <translation>Lembrete</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>Input Error</source>
+        <translation>Erro de Entrada</translation>
+    </message>
+    <message>
+        <source>Connect to see the equivalent current.</source>
+        <translation>Conecte para ver a corrente equivalente.</translation>
+    </message>
+    <message>
+        <source>The ramp end voltage must be above the start voltage.</source>
+        <translation>A tensão final da rampa deve ser maior que a inicial.</translation>
+    </message>
+    <message>
+        <source>Each fault temperature must be above its derate temperature.</source>
+        <translation>Cada temperatura de erro deve ser maior que a sua temperatura de redução.</translation>
+    </message>
+    <message>
+        <source>Partly Applied</source>
+        <translation>Aplicado Parcialmente</translation>
+    </message>
+    <message>
+        <source>Safety settings applied ({0} values).</source>
+        <translation>Configurações de segurança aplicadas ({0} valores).</translation>
+    </message>
+    <message>
+        <source>At Kt = {0:.4f} Nm/A that is {1:.1f} A of phase current.</source>
+        <translation>Com Kt = {0:.4f} Nm/A isso dá {1:.1f} A de corrente de fase.</translation>
+    </message>
+    <message>
+        <source>{0:.1f} °C</source>
+        <translation>{0:.1f} °C</translation>
+    </message>
+    <message>
+        <source>Not available on this firmware, left disabled:
+{0}</source>
+        <translation>Indisponível neste firmware, desabilitado:
+{0}</translation>
+    </message>
+    <message>
+        <source>Enable the watchdog?
+
+If your controller does not feed it, the axis will disarm after {0:.2f} s of normal use.</source>
+        <translation>Habilitar o watchdog?
+
+Se o seu controlador não o alimentar, o eixo vai desarmar após {0:.2f} s de uso normal.</translation>
+    </message>
+    <message>
+        <source>{0} settings applied, {1} failed:
+
+{2}</source>
+        <translation>{0} configurações aplicadas, {1} falharam:
+
+{2}</translation>
+    </message>
+</context>
+<context>
+    <name>PresetTab</name>
+    <message>
+        <source>Settings for driving this ODrive from OpenFFBoard over CAN, taken from its ODrive guide and its CAN driver source. The guide recommends firmware 0.5.6.
+
+OpenFFBoard scales its output as torque = (output / 32767) x maxtorque and sends that in Nm, which the ODrive divides by the torque constant to get current. So the torque constant has to be right, or the wheel draws current that does not match the force being asked for.
+
+Rows already matching are shown in green and will not be written.</source>
+        <translation>Configurações para controlar esta ODrive pelo OpenFFBoard via CAN, tiradas do guia ODrive dele e do código do driver CAN. O guia recomenda o firmware 0.5.6.
+
+O OpenFFBoard escala a saída como torque = (saída / 32767) x maxtorque e envia isso em Nm, que a ODrive divide pela constante de torque para obter corrente. Por isso a constante de torque precisa estar certa, senão o volante puxa uma corrente que não corresponde à força pedida.
+
+Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
+    </message>
+    <message>
+        <source>Preset Options</source>
+        <translation>Opções do Preset</translation>
+    </message>
+    <message>
+        <source>CAN Node ID:</source>
+        <translation>Node ID do CAN:</translation>
+    </message>
+    <message>
+        <source>CAN Baud Rate:</source>
+        <translation>Taxa do CAN:</translation>
+    </message>
+    <message>
+        <source>Velocity limit:</source>
+        <translation>Limite de velocidade:</translation>
+    </message>
+    <message>
+        <source>Re-read from ODrive</source>
+        <translation>Reler da ODrive</translation>
+    </message>
+    <message>
+        <source>Apply Proposed Changes</source>
+        <translation>Aplicar Mudanças Propostas</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>Reminder</source>
+        <translation>Lembrete</translation>
+    </message>
+    <message>
+        <source>Setting</source>
+        <translation>Configuração</translation>
+    </message>
+    <message>
+        <source>Current</source>
+        <translation>Atual</translation>
+    </message>
+    <message>
+        <source>Proposed</source>
+        <translation>Proposto</translation>
+    </message>
+    <message>
+        <source>Why</source>
+        <translation>Por quê</translation>
+    </message>
+    <message>
+        <source>The controller commands torque, not position or velocity.</source>
+        <translation>O controlador comanda torque, não posição ou velocidade.</translation>
+    </message>
+    <message>
+        <source>Pass the torque command straight through, with no ramping in between.</source>
+        <translation>Passa o comando de torque direto, sem rampa no meio.</translation>
+    </message>
+    <message>
+        <source>Otherwise the wheel fights you as it speeds up, which reads as fading force.</source>
+        <translation>Senão o volante briga com você conforme acelera, o que se sente como força sumindo.</translation>
+    </message>
+    <message>
+        <source>High enough that fast steering never reaches it.</source>
+        <translation>Alto o bastante para que esterçar rápido nunca o alcance.</translation>
+    </message>
+    <message>
+        <source>A fast flick of the wheel should not fault the drive mid-use.</source>
+        <translation>Um giro rápido do volante não deve dar erro no drive durante o uso.</translation>
+    </message>
+    <message>
+        <source>Critical: if OpenFFBoard finds the axis idle it runs a full calibration, which overwrites your alignment offset. Arming on boot prevents that.</source>
+        <translation>Crítico: se o OpenFFBoard encontrar o eixo ocioso ele roda uma calibração completa, que sobrescreve o seu offset de alinhamento. Armar no boot evita isso.</translation>
+    </message>
+    <message>
+        <source>Gives a repeatable zero and lets the calibration be stored.</source>
+        <translation>Dá um zero repetível e permite armazenar a calibração.</translation>
+    </message>
+    <message>
+        <source>Required for arming on boot without recalibrating the encoder.</source>
+        <translation>Necessário para armar no boot sem recalibrar o encoder.</translation>
+    </message>
+    <message>
+        <source>Required for arming on boot without recalibrating the motor.</source>
+        <translation>Necessário para armar no boot sem recalibrar o motor.</translation>
+    </message>
+    <message>
+        <source>Must match the node ID the controller is configured to talk to.</source>
+        <translation>Precisa bater com o node ID que o controlador está configurado para conversar.</translation>
+    </message>
+    <message>
+        <source>Must match the controller&apos;s CAN bit rate exactly.</source>
+        <translation>Precisa bater exatamente com a taxa de bits CAN do controlador.</translation>
+    </message>
+    <message>
+        <source>Nothing to Change</source>
+        <translation>Nada a Mudar</translation>
+    </message>
+    <message>
+        <source>Partly Applied</source>
+        <translation>Aplicado Parcialmente</translation>
+    </message>
+    <message>
+        <source>unavailable</source>
+        <translation>indisponível</translation>
+    </message>
+    <message>
+        <source>not connected</source>
+        <translation>não conectado</translation>
+    </message>
+    <message>
+        <source>Write these {0} settings?
+
+{1}</source>
+        <translation>Gravar estas {0} configurações?
+
+{1}</translation>
+    </message>
+    <message>
+        <source>Preset applied ({0} values).</source>
+        <translation>Preset aplicado ({0} valores).</translation>
+    </message>
+    <message>
+        <source>Apply {0} Changes</source>
+        <translation>Aplicar {0} Mudanças</translation>
+    </message>
+    <message>
+        <source>{0} settings applied, {1} failed:
+
+{2}</source>
+        <translation>{0} configurações aplicadas, {1} falharam:
+
+{2}</translation>
     </message>
 </context>
 </TS>

@@ -29,7 +29,7 @@ from ansi2html import Ansi2HTMLConverter
 import fibre
 
 # --- Local Imports ---
-from tabs import DCTab, MotorTab, CANTab, EncoderTab, TerminalTab, GraphTab, ODriveWorker, FirmwareTab, BackupTab
+from tabs import DCTab, MotorTab, CANTab, EncoderTab, TerminalTab, GraphTab, ODriveWorker, FirmwareTab, BackupTab, TuningContainer
 from app_config import AppColors, AppMessages, AppConstants
 
 def resource_path(relative_path):
@@ -239,6 +239,8 @@ class ODriveGUI(QMainWindow):
         self.is_connected = False
         self.last_tab_index = 0
         self.connect_button, self.show_errors_button = None, None
+        self.axis_state_button = None
+        self.current_axis_state = None
         self.original_button_style = ""
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -257,8 +259,9 @@ class ODriveGUI(QMainWindow):
         self.graph_tab = GraphTab(self); self.tabs.addTab(self.graph_tab, "")
         self.terminal_tab = TerminalTab(self); self.tabs.addTab(self.terminal_tab, "")
         self.backup_tab = BackupTab(self); self.tabs.addTab(self.backup_tab, "")
+        self.tuning_tab = TuningContainer(self); self.tabs.addTab(self.tuning_tab, "")
         self.about_tab_placeholder = QWidget(); self.tabs.addTab(self.about_tab_placeholder, "")
-        self.config_tabs = [self.dc_tab, self.motor_tab, self.can_tab, self.encoder_tab, self.firmware_tab]
+        self.config_tabs = [self.dc_tab, self.motor_tab, self.can_tab, self.encoder_tab, self.firmware_tab, self.tuning_tab]
         main_layout.addLayout(top_layout)
         main_layout.addWidget(self.tabs)
         self.setStatusBar(QStatusBar())
@@ -287,13 +290,13 @@ class ODriveGUI(QMainWindow):
             "disconnect": (self.tr("Disconnect from ODrive"), None),
             "show_errors": (self.tr("Show Errors"), None),
             "reboot": (self.tr("Reboot ODrive"), None),
-            "set_idle": (self.tr("Set IDLE (Axis 0)"), self.tr("Puts Axis 0 in IDLE state. Required to save configuration.")),
             "erase": (self.tr("Erase Configuration"), self.tr("Restores ODrive to factory settings. This action is irreversible!")),
             "show_config": (self.tr("View Configuration"), self.tr("Shows the full ODrive configuration and allows saving to a file."))
         }
         for key, (text, tooltip) in buttons_info.items():
             button = self.buttons[key]; button.setText(text)
             if tooltip: button.setToolTip(tooltip)
+        self._update_axis_state_button()
         self.telemetry_group.setTitle(self.tr("Real-Time Telemetry (Axis 0)"))
         if self.is_connected and hasattr(self, 'last_telemetry_data') and self.last_telemetry_data is not None:
             self.update_telemetry_labels(*self.last_telemetry_data)
@@ -303,7 +306,7 @@ class ODriveGUI(QMainWindow):
         self.tabs.setTabText(2, self.tr("Encoder")); self.tabs.setTabText(3, self.tr("CAN"))
         self.tabs.setTabText(4, self.tr("Firmware")); self.tabs.setTabText(5, self.tr("Graph"))
         self.tabs.setTabText(6, self.tr("Terminal")); self.tabs.setTabText(7, self.tr("Backup"))
-        self.tabs.setTabText(8, self.tr("About"))
+        self.tabs.setTabText(8, self.tr("Tuning")); self.tabs.setTabText(9, self.tr("About"))
         self.show_status_message(self.tr("Ready."))
         settings = QSettings()
         current_locale = settings.value('language', 'en_US')
@@ -320,6 +323,7 @@ class ODriveGUI(QMainWindow):
         if hasattr(self, 'graph_tab'): self.graph_tab.retranslate_ui()
         if hasattr(self, 'terminal_tab'): self.terminal_tab.retranslate_ui()
         if hasattr(self, 'backup_tab'): self.backup_tab.retranslate_ui()
+        if hasattr(self, 'tuning_tab'): self.tuning_tab.retranslate_ui()
         
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -370,7 +374,7 @@ class ODriveGUI(QMainWindow):
         buttons_data = [
             ("connect", self.connect_odrive), ("save", self.save_configuration_prompt),
             ("disconnect", self.disconnect_odrive), ("show_errors", self.show_errors),
-            ("reboot", self.reboot_odrive), ("set_idle", self.set_axis0_idle),
+            ("reboot", self.reboot_odrive), ("axis_state", self.toggle_axis_state),
             ("erase", self.erase_configuration_prompt), ("show_config", self.show_config)
         ]
         layout.addWidget(self.status_label, 0, 0, 1, 2)
@@ -378,6 +382,7 @@ class ODriveGUI(QMainWindow):
         for key, func in buttons_data:
             button = QPushButton(); button.clicked.connect(func); self.buttons[key] = button
             if key == "connect": self.connect_button = button
+            if key == "axis_state": self.axis_state_button = button
             if key == "show_errors":
                 self.show_errors_button = button; self.original_button_style = button.styleSheet()
             layout.addWidget(button, row, col)
@@ -395,6 +400,9 @@ class ODriveGUI(QMainWindow):
     
     def update_telemetry_labels(self, pos, vel, vbus, current_lim, current_state_id, pos_set, iq_meas, encoder_is_ready, motor_is_calibrated):
         self.last_telemetry_data = (pos, vel, vbus, current_lim, current_state_id, pos_set, iq_meas, encoder_is_ready, motor_is_calibrated)
+        if current_state_id != self.current_axis_state:
+            self.current_axis_state = current_state_id
+            self._update_axis_state_button()
         state_name = self.AXIS_STATE_MAP.get(current_state_id, f'{self.tr("UNKNOWN")} ({current_state_id})')
         self.pos_label.setText(self.tr("Encoder Position: {0:.2f} °").format(pos * 360.0))
         self.vel_label.setText(self.tr("Estimated Velocity: {0:.2f} [turns/s]").format(vel))
@@ -421,6 +429,8 @@ class ODriveGUI(QMainWindow):
         self.odrv_worker.telemetry_updated.connect(self.graph_tab.update_plot)
         self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.encoder_tab.update_calibration_status(er))
         self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.motor_tab.update_motor_calibration_status(mc))
+        self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.tuning_tab.update_live_current(im))
+        self.odrv_worker.extended_telemetry.connect(self.tuning_tab.update_extended_telemetry)
         self.odrv_worker.finished.connect(self.odrv_thread.quit)
         self.odrv_worker.finished.connect(self.odrv_worker.deleteLater)
         self.odrv_thread.finished.connect(self.odrv_thread.deleteLater)
@@ -483,6 +493,8 @@ class ODriveGUI(QMainWindow):
         self.vbus_label.setText(self.tr("Bus Voltage: -")); self.current_lim_label.setText(self.tr("Current Limit: -"))
         self.current_state_label.setText(self.tr("Current State: -")); self.graph_tab.clear_plot()
         self.last_telemetry_data = None
+        self.current_axis_state = None; self._update_axis_state_button()
+        if hasattr(self, 'tuning_tab'): self.tuning_tab.reset_live_readings()
         
     def disconnect_odrive(self):
         if not self.is_connected or not self.odrv_worker: return
@@ -508,6 +520,61 @@ class ODriveGUI(QMainWindow):
             QMessageBox.critical(self, self.tr(error_title), str(e)); return False
 
     def set_axis0_idle(self): self._execute_odrive_command(lambda odrv: setattr(odrv.axis0, 'requested_state', AppConstants.ODRIVE_EXEC_SCOPE['AXIS_STATE_IDLE']), "Axis 0 set to IDLE state.", "Error setting IDLE state")
+
+    def _update_axis_state_button(self):
+        """
+        Makes the axis state button reflect what it will do next: it offers CLOSED LOOP
+        while the axis is idle, and offers IDLE otherwise (which doubles as an abort
+        during calibration states).
+        """
+        if not self.axis_state_button: return
+        idle_state = AppConstants.ODRIVE_EXEC_SCOPE['AXIS_STATE_IDLE']
+        if self.current_axis_state == idle_state:
+            self.axis_state_button.setText(self.tr("Enter CLOSED LOOP (Axis 0)"))
+            self.axis_state_button.setToolTip(self.tr("Puts Axis 0 in CLOSED_LOOP_CONTROL. Requires a calibrated motor and a ready encoder."))
+        else:
+            self.axis_state_button.setText(self.tr("Set IDLE (Axis 0)"))
+            self.axis_state_button.setToolTip(self.tr("Puts Axis 0 in IDLE state. Required to save configuration, and aborts an ongoing calibration."))
+
+    def toggle_axis_state(self):
+        """Switches Axis 0 between IDLE and CLOSED_LOOP_CONTROL, based on its current state."""
+        if self.current_axis_state == AppConstants.ODRIVE_EXEC_SCOPE['AXIS_STATE_IDLE']:
+            self.set_axis0_closed_loop()
+        else:
+            self.set_axis0_idle()
+
+    def set_axis0_closed_loop(self):
+        """
+        Arms Axis 0 into closed loop control. The ODrive silently refuses this state
+        when the motor or encoder are not ready, so the prerequisites are checked
+        up front and the resulting state is verified afterwards.
+        """
+        if not self.is_connected or not self.odrv_proxy:
+            self.show_status_message(self.tr(AppMessages.ODRIVE_NOT_CONNECTED_CMD_FAILED), AppColors.ERROR, 3000); return
+        try:
+            axis = self.odrv_proxy.odrv.axis0
+            if not axis.motor.is_calibrated:
+                QMessageBox.warning(self, self.tr("Action Required"), self.tr("The motor is not calibrated.\n\nRun the motor calibration on the 'Motor' tab before entering closed loop."))
+                return
+            if not axis.encoder.is_ready:
+                QMessageBox.warning(self, self.tr("Action Required"), self.tr("The encoder is not ready.\n\nRun the encoder calibration on the 'Encoder' tab before entering closed loop."))
+                return
+        except Exception as e:
+            QMessageBox.critical(self, self.tr("Error"), self.tr("Could not read the axis state.\n\nDetails: {0}").format(e)); return
+
+        if self._execute_odrive_command(lambda odrv: setattr(odrv.axis0, 'requested_state', AppConstants.ODRIVE_EXEC_SCOPE['AXIS_STATE_CLOSED_LOOP_CONTROL']), None, "Error entering CLOSED LOOP"):
+            QTimer.singleShot(400, self._verify_closed_loop_engaged)
+
+    def _verify_closed_loop_engaged(self):
+        """Reports whether the axis actually stayed in closed loop, instead of assuming it did."""
+        if not self.is_connected or not self.odrv_proxy: return
+        try:
+            if self.odrv_proxy.odrv.axis0.current_state == AppConstants.ODRIVE_EXEC_SCOPE['AXIS_STATE_CLOSED_LOOP_CONTROL']:
+                self.show_status_message(self.tr("Axis 0 is in CLOSED LOOP CONTROL."), AppColors.SUCCESS, 4000)
+            else:
+                self.show_status_message(self.tr("Axis 0 did not stay in closed loop. Click 'Show Errors' for details."), AppColors.ERROR, 6000)
+        except Exception:
+            pass
     def save_configuration(self): return self._execute_odrive_command(lambda odrv: odrv.save_configuration(), "Configuration saved to ODrive.", "Error Saving Configuration")
     def erase_configuration(self):
         if self._execute_odrive_command(lambda odrv: odrv.erase_configuration(), None, "Error Erasing Configuration"):
