@@ -22,13 +22,14 @@ import math
 
 from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QComboBox, QDoubleSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QAbstractItemView
+    QGroupBox, QComboBox, QDoubleSpinBox, QSpinBox, QTableWidget, QTableWidgetItem,
+    QHeaderView, QMessageBox, QAbstractItemView, QProgressBar
 )
 from PySide6.QtGui import QDoubleValidator
-from PySide6.QtCore import Qt, QEvent
+from PySide6.QtCore import Qt, QEvent, QThread
 
 from .base_tab import BaseTab
+from .tuning_workers import BackEmfKtWorker
 from app_config import AppColors, AppMessages
 
 GRAVITY = 9.80665
@@ -54,6 +55,9 @@ class TuningTab(BaseTab):
         self.current_samples = [] # rolling window of recent Iq readings
         self.live_current = None
         self.measured_kt = None
+        self.backemf_kt = None
+        self.auto_thread = None
+        self.auto_worker = None
         self._setup_ui()
         self.retranslate_ui()
 
@@ -162,9 +166,63 @@ class TuningTab(BaseTab):
         self.apply_btn.setEnabled(False)
         result_layout.addWidget(self.apply_btn, 0, Qt.AlignmentFlag.AlignRight)
 
+        # --- Automatic method: back-EMF, no external load needed ---
+        self.auto_group = QGroupBox()
+        auto_layout = QVBoxLayout(self.auto_group)
+        self.auto_help = QLabel()
+        self.auto_help.setWordWrap(True)
+        self.auto_help.setStyleSheet(f"color: {AppColors.INFO};")
+        auto_layout.addWidget(self.auto_help)
+
+        auto_form = QFormLayout()
+        self.auto_max_vel = QDoubleSpinBox()
+        self.auto_max_vel.setRange(2.0, 30.0)
+        self.auto_max_vel.setDecimals(1)
+        self.auto_max_vel.setValue(10.0)
+        self.auto_max_vel.setSuffix(" turns/s")
+        self.auto_points = QSpinBox()
+        self.auto_points.setRange(3, 12)
+        self.auto_points.setValue(5)
+        self.auto_current = QDoubleSpinBox()
+        self.auto_current.setRange(1.0, 60.0)
+        self.auto_current.setDecimals(1)
+        self.auto_current.setValue(10.0)
+        self.auto_current.setSuffix(" A")
+        self.label_auto_vel, self.label_auto_points, self.label_auto_current = QLabel(), QLabel(), QLabel()
+        auto_form.addRow(self.label_auto_vel, self.auto_max_vel)
+        auto_form.addRow(self.label_auto_points, self.auto_points)
+        auto_form.addRow(self.label_auto_current, self.auto_current)
+        auto_layout.addLayout(auto_form)
+
+        auto_buttons = QHBoxLayout()
+        self.auto_start_btn = QPushButton()
+        self.auto_start_btn.clicked.connect(self.start_backemf)
+        self.auto_cancel_btn = QPushButton()
+        self.auto_cancel_btn.clicked.connect(self.cancel_backemf)
+        self.auto_cancel_btn.setEnabled(False)
+        self.auto_apply_btn = QPushButton()
+        self.auto_apply_btn.clicked.connect(self.apply_backemf)
+        self.auto_apply_btn.setEnabled(False)
+        auto_buttons.addWidget(self.auto_start_btn)
+        auto_buttons.addWidget(self.auto_cancel_btn)
+        auto_buttons.addStretch()
+        auto_buttons.addWidget(self.auto_apply_btn)
+        auto_layout.addLayout(auto_buttons)
+
+        self.auto_progress = QProgressBar()
+        self.auto_progress.setRange(0, 100)
+        self.auto_result_label = QLabel()
+        self.auto_result_label.setWordWrap(True)
+        self.compare_label = QLabel()
+        self.compare_label.setWordWrap(True)
+        auto_layout.addWidget(self.auto_progress)
+        auto_layout.addWidget(self.auto_result_label)
+        auto_layout.addWidget(self.compare_label)
+
         main_layout.addWidget(self.setup_group)
         main_layout.addWidget(self.capture_group)
         main_layout.addWidget(self.result_group)
+        main_layout.addWidget(self.auto_group)
         main_layout.addStretch()
 
     def retranslate_ui(self):
@@ -193,6 +251,22 @@ class TuningTab(BaseTab):
         self.result_group.setTitle(self.tr("Result"))
         self.apply_btn.setText(self.tr("Apply Kt to ODrive"))
         self.apply_btn.setToolTip(self.tr("Writes the measured value to axis0.motor.config.torque_constant."))
+
+        self.auto_group.setTitle(self.tr("Automatic Method (back-EMF)"))
+        self.auto_help.setText(self.tr(
+            "Spins the motor with no load and reads the voltage it has to apply. That voltage "
+            "rises with speed in proportion to the flux linkage, which gives Kt without any "
+            "weights. Free the shaft first: the motor will spin on its own, both ways.\n\n"
+            "Typically within about 5% of the weight method, which stays the more accurate of "
+            "the two. Running both and comparing is the point."
+        ))
+        self.label_auto_vel.setText(self.tr("Top speed:"))
+        self.label_auto_points.setText(self.tr("Speeds sampled:"))
+        self.label_auto_current.setText(self.tr("Current limit during test:"))
+        self.auto_start_btn.setText(self.tr("Measure Automatically"))
+        self.auto_cancel_btn.setText(self.tr("Cancel"))
+        self.auto_apply_btn.setText(self.tr("Apply This Kt"))
+
         self._on_method_changed()
         self._recompute()
         self._refresh_configured_kt()
@@ -415,6 +489,7 @@ class TuningTab(BaseTab):
             self.quality_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
         self.quality_label.setText(quality)
         self.apply_btn.setEnabled(True)
+        self._update_comparison()
 
     def _refresh_configured_kt(self):
         """Shows the value currently stored on the ODrive, for comparison."""
@@ -427,6 +502,107 @@ class TuningTab(BaseTab):
         except Exception:
             self.configured_label.setText(self.tr("Currently on the ODrive: could not read."))
 
+    # ------------------------------------------------- automatic (back-EMF) ---
+
+    def start_backemf(self):
+        """Runs the no-load back-EMF measurement in a background thread."""
+        odrv = self.get_odrv()
+        if not odrv or self.auto_thread is not None:
+            return
+        try:
+            if not odrv.axis0.motor.is_calibrated or not odrv.axis0.encoder.is_ready:
+                QMessageBox.warning(self, self.tr("Action Required"), self.tr(
+                    "Calibrate the motor and encoder before measuring."))
+                return
+        except Exception as e:
+            QMessageBox.critical(self, self.tr("Error"), self.tr(
+                "Could not read the axis state.\n\nDetails: {0}").format(e))
+            return
+
+        confirm = QMessageBox.question(self, self.tr("Confirm"), self.tr(
+            "The motor will spin on its own, in both directions.\n\nIs the shaft free and clear?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        self.auto_start_btn.setEnabled(False)
+        self.auto_cancel_btn.setEnabled(True)
+        self.auto_progress.setValue(0)
+
+        self.auto_thread = QThread()
+        self.auto_worker = BackEmfKtWorker(
+            odrv,
+            max_velocity=self.auto_max_vel.value(),
+            speed_count=self.auto_points.value(),
+            current_limit=self.auto_current.value(),
+            settle_s=1.5,
+            sample_s=1.0,
+        )
+        self.auto_worker.moveToThread(self.auto_thread)
+        self.auto_thread.started.connect(self.auto_worker.run)
+        self.auto_worker.progress.connect(self._on_auto_progress)
+        self.auto_worker.result.connect(self._on_auto_result)
+        self.auto_worker.finished.connect(self.auto_thread.quit)
+        self.auto_worker.finished.connect(self.auto_worker.deleteLater)
+        self.auto_thread.finished.connect(self.auto_thread.deleteLater)
+        self.auto_thread.finished.connect(self._on_auto_thread_finished)
+        self.auto_thread.start()
+
+    def cancel_backemf(self):
+        if self.auto_worker:
+            self.auto_worker.stop()
+            self.auto_cancel_btn.setEnabled(False)
+
+    def _on_auto_progress(self, message, percent):
+        self.auto_result_label.setText(message)
+        self.auto_progress.setValue(percent)
+
+    def _on_auto_result(self, success, message, kt):
+        self.backemf_kt = kt if success else None
+        self.auto_result_label.setText(message)
+        self.auto_result_label.setStyleSheet(
+            f"color: {AppColors.SUCCESS if success else AppColors.ERROR};")
+        self.auto_apply_btn.setEnabled(bool(kt))
+        if success:
+            self.auto_progress.setValue(100)
+        self._update_comparison()
+
+    def _on_auto_thread_finished(self):
+        self.auto_thread, self.auto_worker = None, None
+        self.auto_start_btn.setEnabled(True)
+        self.auto_cancel_btn.setEnabled(False)
+        self._refresh_configured_kt()
+
+    def _update_comparison(self):
+        """
+        Cross-checks the two methods. Agreement is the whole point of having both: the
+        weight measurement is the more trustworthy one, so it is what the automatic
+        result is judged against.
+        """
+        if not self.backemf_kt or not self.measured_kt:
+            self.compare_label.clear()
+            return
+        difference = abs(self.backemf_kt - self.measured_kt) / self.measured_kt * 100.0
+        text = self.tr("Weight method: {0:.4f} · Back-EMF: {1:.4f} · Difference: {2:.1f}%").format(
+            self.measured_kt, self.backemf_kt, difference)
+        if difference <= 5.0:
+            text += "\n" + self.tr("The two agree. Either value is trustworthy.")
+            colour = AppColors.SUCCESS
+        elif difference <= 15.0:
+            text += "\n" + self.tr("Some disagreement. Prefer the weight result and re-run the automatic one.")
+            colour = AppColors.WARNING
+        else:
+            text += "\n" + self.tr("They disagree badly. Check the pole pairs, and that the shaft was free.")
+            colour = AppColors.ERROR
+        self.compare_label.setText(text)
+        self.compare_label.setStyleSheet(f"color: {colour};")
+
+    def apply_backemf(self):
+        """Writes the automatically measured value to the ODrive."""
+        if not self.backemf_kt:
+            return
+        self._write_torque_constant(self.backemf_kt)
+
     # ------------------------------------------------------------ BaseTab ---
 
     def populate_fields(self):
@@ -434,25 +610,29 @@ class TuningTab(BaseTab):
         self._refresh_configured_kt()
 
     def apply_config(self):
-        """Writes the measured torque constant to the ODrive after confirmation."""
+        """Writes the torque constant from the weight based measurement."""
+        self._write_torque_constant(self.measured_kt)
+
+    def _write_torque_constant(self, kt):
+        """Writes a measured torque constant to the ODrive after confirmation."""
         odrv = self.get_odrv()
         if not odrv:
             return
-        if not self.measured_kt or self.measured_kt <= 0:
+        if not kt or kt <= 0:
             return
 
         confirm = QMessageBox.question(
             self, self.tr("Confirm"),
             self.tr("Write Kt = {0:.4f} Nm/A to axis0.motor.config.torque_constant?\n\n"
                     "A lower value makes the ODrive command more current for the same requested "
-                    "torque, which heats the motor.").format(self.measured_kt),
+                    "torque, which heats the motor.").format(kt),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
 
         try:
-            odrv.axis0.motor.config.torque_constant = float(self.measured_kt)
+            odrv.axis0.motor.config.torque_constant = float(kt)
             self.main_window.show_status_message(
                 self.tr("Torque constant applied."), AppColors.SUCCESS, 3000)
             self._refresh_configured_kt()

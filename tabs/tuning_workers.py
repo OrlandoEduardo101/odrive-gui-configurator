@@ -337,3 +337,253 @@ class OffsetAlignmentWorker(QObject):
             except Exception:
                 pass
             self.finished.emit()
+
+
+class BackEmfKtWorker(QObject):
+    """
+    Measures the torque constant from the motor's own back-EMF, with no external load.
+
+    Spinning with no load, the voltage the drive has to apply is dominated by the
+    back-EMF, so the applied voltage magnitude rises linearly with speed:
+
+        |V| = lambda * omega_electrical + (R * Iq + cross-coupling)
+
+    Sampling several speeds and fitting a line puts lambda in the slope and leaves the
+    resistive drop and the d-axis cross-coupling in the intercept, which is what makes
+    this robust without knowing either of them precisely.
+
+    Kt then follows the firmware's own convention. ODrive's back-EMF feedforward reads
+    (motor.cpp, fw-v0.5.6):
+
+        vq += phase_vel * (2/3) * (torque_constant / pole_pairs)
+
+    so torque_constant = lambda * 1.5 * pole_pairs. Using the firmware's own relation
+    means the measured value is consistent with how the firmware consumes it.
+    """
+    progress = Signal(str, int)
+    result = Signal(bool, str, object)     # success, report, measured Kt (or None)
+    finished = Signal()
+
+    def __init__(self, odrv, max_velocity, speed_count, current_limit, settle_s, sample_s):
+        super().__init__()
+        self.odrv = odrv
+        self.max_velocity = abs(max_velocity)
+        self.speed_count = speed_count
+        self.current_limit = current_limit
+        self.settle_s = settle_s
+        self.sample_s = sample_s
+        self._is_running = True
+        self._saved = {}
+
+    def stop(self):
+        self._is_running = False
+
+    def _applied_voltage(self):
+        """
+        Magnitude of the applied voltage vector. Using alpha/beta keeps this independent
+        of the rotor angle, which cannot be sampled synchronously over USB anyway.
+        """
+        control = self.odrv.axis0.motor.current_control
+        return math.hypot(control.final_v_alpha, control.final_v_beta)
+
+    def _enter_closed_loop(self):
+        axis = self.odrv.axis0
+        axis.error = 0
+        axis.motor.error = 0
+        axis.encoder.error = 0
+        axis.controller.error = 0
+        axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
+        axis.controller.config.input_mode = INPUT_MODE_VEL_RAMP
+        axis.controller.input_vel = 0.0
+        axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not self._is_running:
+                return False
+            if axis.current_state == AXIS_STATE_CLOSED_LOOP_CONTROL:
+                return True
+            time.sleep(0.05)
+        return False
+
+    def _measure_speed(self, velocity):
+        """Returns (mean electrical omega, mean |V|, mean Iq) at one commanded speed."""
+        axis = self.odrv.axis0
+        axis.controller.input_vel = velocity
+
+        settle_deadline = time.time() + self.settle_s
+        while time.time() < settle_deadline:
+            if not self._is_running:
+                return None
+            time.sleep(0.05)
+
+        # Always take at least one sample, so a short sampling window reports a real
+        # reading rather than looking like a cancellation.
+        volts, speeds, currents = [], [], []
+        sample_deadline = time.time() + self.sample_s
+        while True:
+            if not self._is_running:
+                return None
+            if axis.error != 0:
+                break
+            volts.append(self._applied_voltage())
+            speeds.append(axis.encoder.vel_estimate)
+            currents.append(axis.motor.current_control.Iq_measured)
+            if time.time() >= sample_deadline:
+                break
+            time.sleep(0.02)
+
+        if not volts:
+            return None
+        pole_pairs = int(axis.motor.config.pole_pairs)
+        mean_turns = sum(speeds) / len(speeds)
+        omega_electrical = abs(mean_turns) * 2.0 * math.pi * pole_pairs
+        return omega_electrical, sum(volts) / len(volts), abs(sum(currents) / len(currents))
+
+    @staticmethod
+    def _linear_fit(xs, ys):
+        n = len(xs)
+        mean_x, mean_y = sum(xs) / n, sum(ys) / n
+        sxx = sum((x - mean_x) ** 2 for x in xs)
+        if sxx == 0:
+            return None
+        slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
+        intercept = mean_y - slope * mean_x
+        ss_tot = sum((y - mean_y) ** 2 for y in ys)
+        ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys))
+        return slope, intercept, (1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0)
+
+    def run(self):
+        axis = self.odrv.axis0
+        try:
+            pole_pairs = int(axis.motor.config.pole_pairs)
+        except Exception as e:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker", "Could not read pole pairs: {0}").format(e), None)
+            self.finished.emit()
+            return
+        if pole_pairs <= 0:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker", "Pole pairs must be greater than zero."), None)
+            self.finished.emit()
+            return
+
+        try:
+            self._applied_voltage()
+        except AttributeError:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker",
+                "This firmware does not expose final_v_alpha / final_v_beta, so the applied "
+                "voltage cannot be read. The weight based method is the alternative."), None)
+            self.finished.emit()
+            return
+
+        for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
+                          ('control_mode', ('controller', 'config', 'control_mode')),
+                          ('input_mode', ('controller', 'config', 'input_mode')),
+                          ('vel_limit', ('controller', 'config', 'vel_limit'))):
+            try:
+                target = axis
+                for part in path[:-1]:
+                    target = getattr(target, part)
+                self._saved[key] = getattr(target, path[-1])
+            except Exception:
+                pass
+
+        try:
+            axis.motor.config.current_lim = float(self.current_limit)
+            axis.controller.config.vel_limit = max(self.max_velocity * 2.0, 5.0)
+            if not self._enter_closed_loop():
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker", "The axis would not enter closed loop control."))
+
+            # Spread the speeds over the upper half of the range: too slow and the
+            # back-EMF is swamped by inverter dead time and the resistive drop.
+            lowest = self.max_velocity / 3.0
+            step = (self.max_velocity - lowest) / max(self.speed_count - 1, 1)
+            targets = [lowest + i * step for i in range(self.speed_count)]
+
+            points = []
+            runs = [(1.0, QCoreApplication.translate("BackEmfKtWorker", "forward")),
+                    (-1.0, QCoreApplication.translate("BackEmfKtWorker", "reverse"))]
+            total = len(targets) * len(runs)
+            done = 0
+            for direction, label in runs:
+                for target in targets:
+                    if not self._is_running:
+                        raise InterruptedError
+                    self.progress.emit(QCoreApplication.translate(
+                        "BackEmfKtWorker", "Measuring {0:.1f} turns/s ({1})").format(target, label),
+                        int(100 * done / total))
+                    measurement = self._measure_speed(target * direction)
+                    if measurement is None:
+                        raise InterruptedError
+                    points.append(measurement)
+                    done += 1
+
+            axis.controller.input_vel = 0.0
+            self._go_idle()
+
+            usable = [(w, v) for w, v, _ in points if w > 1.0]
+            if len(usable) < 2:
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker", "The motor did not reach a usable speed."))
+
+            fit = self._linear_fit([w for w, _ in usable], [v for _, v in usable])
+            if fit is None:
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker", "All points landed at the same speed."))
+            flux_linkage, intercept, r_squared = fit
+            if flux_linkage <= 0:
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker", "The fitted slope is negative, which is not physical."))
+
+            kt = 1.5 * pole_pairs * flux_linkage
+            original_limit = self._saved.get('current_lim')
+
+            lines = [QCoreApplication.translate("BackEmfKtWorker", "Kt = {0:.4f} Nm/A").format(kt),
+                     QCoreApplication.translate("BackEmfKtWorker",
+                         "Fit quality R² = {0:.4f} over {1} points.").format(r_squared, len(usable)),
+                     ""]
+            if original_limit:
+                lines.append(QCoreApplication.translate("BackEmfKtWorker",
+                    "At your current limit of {0:.1f} A that is {1:.1f} Nm of peak torque.")
+                    .format(original_limit, kt * original_limit))
+                lines.append("")
+            lines.append(QCoreApplication.translate("BackEmfKtWorker",
+                "Flux linkage {0:.5f} Vs/rad, offset absorbed {1:.2f} V.").format(flux_linkage, intercept))
+            if r_squared < 0.98:
+                lines.append("")
+                lines.append(QCoreApplication.translate("BackEmfKtWorker",
+                    "R² below 0.98 means the points are not on a line. Treat this as unreliable, "
+                    "and check that the shaft really was free."))
+            self.result.emit(True, "\n".join(lines), kt)
+
+        except InterruptedError:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker", "Measurement cancelled."), None)
+        except fibre.protocol.ChannelBrokenException:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker", "Connection to the ODrive was lost."), None)
+        except Exception as e:
+            self.result.emit(False, QCoreApplication.translate(
+                "BackEmfKtWorker", "The measurement failed: {0}").format(e), None)
+        finally:
+            try:
+                self.odrv.axis0.controller.input_vel = 0.0
+                self.odrv.axis0.requested_state = AXIS_STATE_IDLE
+                for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
+                                  ('control_mode', ('controller', 'config', 'control_mode')),
+                                  ('input_mode', ('controller', 'config', 'input_mode')),
+                                  ('vel_limit', ('controller', 'config', 'vel_limit'))):
+                    if key in self._saved:
+                        target = self.odrv.axis0
+                        for part in path[:-1]:
+                            target = getattr(target, part)
+                        setattr(target, path[-1], self._saved[key])
+            except Exception:
+                pass
+            self.finished.emit()
+
+    def _go_idle(self):
+        self.odrv.axis0.requested_state = AXIS_STATE_IDLE
+        time.sleep(0.15)

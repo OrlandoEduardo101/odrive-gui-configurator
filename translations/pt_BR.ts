@@ -2042,6 +2042,82 @@ Connect to the ODrive, put Axis 0 in closed loop so it holds the load, and wait 
 
 Conecte na ODrive, coloque o Eixo 0 em malha fechada para que ele segure a carga, e aguarde a leitura completar.</translation>
     </message>
+    <message>
+        <source>Automatic Method (back-EMF)</source>
+        <translation>Método Automático (força contra-eletromotriz)</translation>
+    </message>
+    <message>
+        <source>Spins the motor with no load and reads the voltage it has to apply. That voltage rises with speed in proportion to the flux linkage, which gives Kt without any weights. Free the shaft first: the motor will spin on its own, both ways.
+
+Typically within about 5% of the weight method, which stays the more accurate of the two. Running both and comparing is the point.</source>
+        <translation>Gira o motor sem carga e lê a tensão que ele precisa aplicar. Essa tensão sobe com a velocidade proporcionalmente ao fluxo concatenado, o que dá o Kt sem nenhum peso. Libere o eixo antes: o motor vai girar sozinho, nos dois sentidos.
+
+Normalmente fica dentro de uns 5% do método do peso, que continua sendo o mais preciso dos dois. Rodar os dois e comparar é justamente o objetivo.</translation>
+    </message>
+    <message>
+        <source>Top speed:</source>
+        <translation>Velocidade máxima:</translation>
+    </message>
+    <message>
+        <source>Speeds sampled:</source>
+        <translation>Velocidades amostradas:</translation>
+    </message>
+    <message>
+        <source>Current limit during test:</source>
+        <translation>Limite de corrente durante o teste:</translation>
+    </message>
+    <message>
+        <source>Measure Automatically</source>
+        <translation>Medir Automaticamente</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Apply This Kt</source>
+        <translation>Aplicar Este Kt</translation>
+    </message>
+    <message>
+        <source>The motor will spin on its own, in both directions.
+
+Is the shaft free and clear?</source>
+        <translation>O motor vai girar sozinho, nos dois sentidos.
+
+O eixo está livre e desobstruído?</translation>
+    </message>
+    <message>
+        <source>Weight method: {0:.4f} · Back-EMF: {1:.4f} · Difference: {2:.1f}%</source>
+        <translation>Método do peso: {0:.4f} · Back-EMF: {1:.4f} · Diferença: {2:.1f}%</translation>
+    </message>
+    <message>
+        <source>The two agree. Either value is trustworthy.</source>
+        <translation>Os dois concordam. Qualquer um dos valores é confiável.</translation>
+    </message>
+    <message>
+        <source>Action Required</source>
+        <translation>Ação Necessária</translation>
+    </message>
+    <message>
+        <source>Calibrate the motor and encoder before measuring.</source>
+        <translation>Calibre o motor e o encoder antes de medir.</translation>
+    </message>
+    <message>
+        <source>Some disagreement. Prefer the weight result and re-run the automatic one.</source>
+        <translation>Alguma divergência. Prefira o resultado do peso e rode o automático de novo.</translation>
+    </message>
+    <message>
+        <source>They disagree badly. Check the pole pairs, and that the shaft was free.</source>
+        <translation>Divergem muito. Confira os pares de polos e se o eixo estava realmente livre.</translation>
+    </message>
+    <message>
+        <source>Could not read the axis state.
+
+Details: {0}</source>
+        <translation>Não foi possível ler o estado do eixo.
+
+Detalhes: {0}</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>
@@ -2616,6 +2692,81 @@ Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
         <translation>{0} configurações aplicadas, {1} falharam:
 
 {2}</translation>
+    </message>
+</context>
+<context>
+    <name>BackEmfKtWorker</name>
+    <message>
+        <source>Pole pairs must be greater than zero.</source>
+        <translation>Os pares de polos precisam ser maiores que zero.</translation>
+    </message>
+    <message>
+        <source>This firmware does not expose final_v_alpha / final_v_beta, so the applied voltage cannot be read. The weight based method is the alternative.</source>
+        <translation>Este firmware não expõe final_v_alpha / final_v_beta, então a tensão aplicada não pode ser lida. O método baseado em peso é a alternativa.</translation>
+    </message>
+    <message>
+        <source>The axis would not enter closed loop control.</source>
+        <translation>O eixo não entrou em controle de malha fechada.</translation>
+    </message>
+    <message>
+        <source>forward</source>
+        <translation>sentido horário</translation>
+    </message>
+    <message>
+        <source>reverse</source>
+        <translation>sentido anti-horário</translation>
+    </message>
+    <message>
+        <source>The motor did not reach a usable speed.</source>
+        <translation>O motor não atingiu uma velocidade utilizável.</translation>
+    </message>
+    <message>
+        <source>All points landed at the same speed.</source>
+        <translation>Todos os pontos caíram na mesma velocidade.</translation>
+    </message>
+    <message>
+        <source>The fitted slope is negative, which is not physical.</source>
+        <translation>A inclinação ajustada é negativa, o que não é físico.</translation>
+    </message>
+    <message>
+        <source>R² below 0.98 means the points are not on a line. Treat this as unreliable, and check that the shaft really was free.</source>
+        <translation>R² abaixo de 0,98 significa que os pontos não estão numa reta. Trate como não confiável e verifique se o eixo estava mesmo livre.</translation>
+    </message>
+    <message>
+        <source>Measurement cancelled.</source>
+        <translation>Medição cancelada.</translation>
+    </message>
+    <message>
+        <source>Connection to the ODrive was lost.</source>
+        <translation>A conexão com a ODrive foi perdida.</translation>
+    </message>
+    <message>
+        <source>Kt = {0:.4f} Nm/A</source>
+        <translation>Kt = {0:.4f} Nm/A</translation>
+    </message>
+    <message>
+        <source>Fit quality R² = {0:.4f} over {1} points.</source>
+        <translation>Qualidade do ajuste R² = {0:.4f} em {1} pontos.</translation>
+    </message>
+    <message>
+        <source>Flux linkage {0:.5f} Vs/rad, offset absorbed {1:.2f} V.</source>
+        <translation>Fluxo concatenado {0:.5f} Vs/rad, offset absorvido {1:.2f} V.</translation>
+    </message>
+    <message>
+        <source>Could not read pole pairs: {0}</source>
+        <translation>Não foi possível ler os pares de polos: {0}</translation>
+    </message>
+    <message>
+        <source>At your current limit of {0:.1f} A that is {1:.1f} Nm of peak torque.</source>
+        <translation>No seu limite de corrente de {0:.1f} A isso dá {1:.1f} Nm de torque de pico.</translation>
+    </message>
+    <message>
+        <source>The measurement failed: {0}</source>
+        <translation>A medição falhou: {0}</translation>
+    </message>
+    <message>
+        <source>Measuring {0:.1f} turns/s ({1})</source>
+        <translation>Medindo {0:.1f} voltas/s ({1})</translation>
     </message>
 </context>
 </TS>
