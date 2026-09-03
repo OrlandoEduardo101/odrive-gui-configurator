@@ -962,6 +962,70 @@ A aplicação perderá a conexão.</translation>
         <source>Go to Download Page</source>
         <translation>Ir para a Página de Download</translation>
     </message>
+    <message>
+        <source>Automatic Firmware Download</source>
+        <translation>Download Automático de Firmware</translation>
+    </message>
+    <message>
+        <source>Downloads the official firmware built for this exact board from the ODrive releases. Do this while still connected normally: in DFU mode the board no longer reports its hardware version, so the right file cannot be identified.
+
+The OpenFFBoard ODrive guide recommends fw-v0.5.6, the last release for this hardware generation.</source>
+        <translation>Baixa o firmware oficial compilado exatamente para esta placa, direto dos releases da ODrive. Faça isto ainda conectado normalmente: em modo DFU a placa deixa de reportar a versão de hardware, e aí não dá para identificar o arquivo certo.
+
+O guia ODrive do OpenFFBoard recomenda o fw-v0.5.6, o último release desta geração de hardware.</translation>
+    </message>
+    <message>
+        <source>Version:</source>
+        <translation>Versão:</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Baixar</translation>
+    </message>
+    <message>
+        <source>Fetches the release file matching this board&apos;s hardware version.</source>
+        <translation>Busca o arquivo do release que corresponde à versão de hardware desta placa.</translation>
+    </message>
+    <message>
+        <source>Download Complete</source>
+        <translation>Download Concluído</translation>
+    </message>
+    <message>
+        <source>Download Failed</source>
+        <translation>Falha no Download</translation>
+    </message>
+    <message>
+        <source>Connect to the ODrive to detect which firmware it needs.</source>
+        <translation>Conecte na ODrive para detectar de qual firmware ela precisa.</translation>
+    </message>
+    <message>
+        <source>This board did not report its voltage variant, so the right firmware cannot be identified. Select the file manually.</source>
+        <translation>Esta placa não reportou a variante de tensão, então o firmware correto não pode ser identificado. Selecione o arquivo manualmente.</translation>
+    </message>
+    <message>
+        <source>Unknown Board</source>
+        <translation>Placa Desconhecida</translation>
+    </message>
+    <message>
+        <source>The hardware version could not be read, so the matching firmware cannot be chosen.</source>
+        <translation>A versão de hardware não pôde ser lida, então o firmware correspondente não pode ser escolhido.</translation>
+    </message>
+    <message>
+        <source>Could not read the hardware version.</source>
+        <translation>Não foi possível ler a versão de hardware.</translation>
+    </message>
+    <message>
+        <source>Detected ODrive v{0}.{1} {2}V, needs &lt;b&gt;{3}&lt;/b&gt;</source>
+        <translation>Detectada ODrive v{0}.{1} {2}V, precisa de &lt;b&gt;{3}&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>{0}
+
+Now put the ODrive in DFU mode, check for it, and install.</source>
+        <translation>{0}
+
+Agora coloque a ODrive em modo DFU, verifique, e instale.</translation>
+    </message>
 </context>
 <context>
     <name>FlashWorker</name>
@@ -2767,6 +2831,77 @@ Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
     <message>
         <source>Measuring {0:.1f} turns/s ({1})</source>
         <translation>Medindo {0:.1f} voltas/s ({1})</translation>
+    </message>
+</context>
+<context>
+    <name>FirmwareDownloadWorker</name>
+    <message>
+        <source>Download complete.</source>
+        <translation>Download concluído.</translation>
+    </message>
+    <message>
+        <source>Already downloaded.</source>
+        <translation>Já baixado.</translation>
+    </message>
+    <message>
+        <source>Looking up {0}...</source>
+        <translation>Consultando {0}...</translation>
+    </message>
+    <message>
+        <source>Downloaded {0}
+
+Saved to:
+{1}</source>
+        <translation>Baixado {0}
+
+Salvo em:
+{1}</translation>
+    </message>
+    <message>
+        <source>Release {0} has no file named {1}.
+
+This firmware version may not have been built for your board revision.</source>
+        <translation>O release {0} não tem nenhum arquivo chamado {1}.
+
+Esta versão de firmware pode não ter sido compilada para a sua revisão de placa.</translation>
+    </message>
+    <message>
+        <source>Using the copy already downloaded:
+{0}</source>
+        <translation>Usando a cópia já baixada:
+{0}</translation>
+    </message>
+    <message>
+        <source>Download cancelled.</source>
+        <translation>Download cancelado.</translation>
+    </message>
+    <message>
+        <source>The download is incomplete ({0} of {1} bytes). Nothing was saved.</source>
+        <translation>O download está incompleto ({0} de {1} bytes). Nada foi salvo.</translation>
+    </message>
+    <message>
+        <source>GitHub returned an error: {0}</source>
+        <translation>O GitHub retornou um erro: {0}</translation>
+    </message>
+    <message>
+        <source>Could not reach GitHub: {0}
+
+Check the internet connection.</source>
+        <translation>Não foi possível acessar o GitHub: {0}
+
+Verifique a conexão com a internet.</translation>
+    </message>
+    <message>
+        <source>The download failed: {0}</source>
+        <translation>O download falhou: {0}</translation>
+    </message>
+    <message>
+        <source>Downloading {0}: {1:.1f} MB</source>
+        <translation>Baixando {0}: {1:.1f} MB</translation>
+    </message>
+    <message>
+        <source>The downloaded file is not a firmware image. Nothing was saved.</source>
+        <translation>O arquivo baixado não é uma imagem de firmware. Nada foi salvo.</translation>
     </message>
 </context>
 </TS>

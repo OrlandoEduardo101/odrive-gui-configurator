@@ -11,12 +11,14 @@ import shutil
 import tempfile
 from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, 
-    QMessageBox, QTextEdit, QFileDialog, QWidget
+    QMessageBox, QTextEdit, QFileDialog, QWidget, QComboBox, QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, QUrl, QCoreApplication, QEvent, Signal, QObject
 from PySide6.QtGui import QFont, QDesktopServices, QTextCursor
 
 from .base_tab import BaseTab
+from .firmware_download import (FirmwareDownloadWorker, expected_asset_name,
+                                AVAILABLE_VERSIONS, RECOMMENDED_VERSION)
 from app_config import AppColors
 
 def find_stm32_programmer_cli():
@@ -133,6 +135,7 @@ class FirmwareTab(BaseTab):
     def __init__(self, main_window, parent=None):
         super().__init__(main_window, parent)
         self.flash_thread, self.flash_worker = None, None
+        self.download_thread, self.download_worker = None, None
         self.dfu_check_thread, self.dfu_check_worker = None, None
         self.dfu_reboot_thread, self.dfu_reboot_worker = None, None
         self.stm32_cli_path = find_stm32_programmer_cli()
@@ -191,6 +194,26 @@ class FirmwareTab(BaseTab):
             self.check_dfu_btn.setEnabled(False)
         prereq_layout.addWidget(self.stm32_prog_status_label)
         left_panel_layout.addWidget(self.prereq_group)
+        self.download_group = QGroupBox()
+        download_layout = QVBoxLayout(self.download_group)
+        self.download_help = QLabel(); self.download_help.setWordWrap(True)
+        self.download_help.setStyleSheet(f"color: {AppColors.INFO};")
+        download_layout.addWidget(self.download_help)
+        version_row = QHBoxLayout()
+        self.label_fw_version_pick = QLabel()
+        self.fw_version_combo = QComboBox()
+        for tag in AVAILABLE_VERSIONS: self.fw_version_combo.addItem(tag)
+        self.fw_version_combo.setCurrentText(RECOMMENDED_VERSION)
+        version_row.addWidget(self.label_fw_version_pick); version_row.addWidget(self.fw_version_combo)
+        self.download_btn = QPushButton(); self.download_btn.clicked.connect(self.start_firmware_download)
+        self.download_btn.setEnabled(False)
+        version_row.addWidget(self.download_btn)
+        download_layout.addLayout(version_row)
+        self.detected_board_label = QLabel(); self.detected_board_label.setWordWrap(True)
+        download_layout.addWidget(self.detected_board_label)
+        self.download_progress = QProgressBar(); self.download_progress.setRange(0, 100)
+        download_layout.addWidget(self.download_progress)
+        left_panel_layout.addWidget(self.download_group)
         self.controls_group = QGroupBox()
         controls_layout = QVBoxLayout(self.controls_group)
         action_buttons_layout = QHBoxLayout()
@@ -219,6 +242,17 @@ class FirmwareTab(BaseTab):
         self.label_fw.setText(self.tr("Firmware Version:"))
         self.label_hw.setText(self.tr("Hardware Version:"))
         self.label_serial.setText(self.tr("Serial Number:"))
+        self.download_group.setTitle(self.tr("Automatic Firmware Download"))
+        self.download_help.setText(self.tr(
+            "Downloads the official firmware built for this exact board from the ODrive "
+            "releases. Do this while still connected normally: in DFU mode the board no longer "
+            "reports its hardware version, so the right file cannot be identified.\n\n"
+            "The OpenFFBoard ODrive guide recommends fw-v0.5.6, the last release for this "
+            "hardware generation."))
+        self.label_fw_version_pick.setText(self.tr("Version:"))
+        self.download_btn.setText(self.tr("Download"))
+        self.download_btn.setToolTip(self.tr("Fetches the release file matching this board's hardware version."))
+        self._update_detected_board()
         self.dfu_actions_group.setTitle(self.tr("Update Steps"))
         self.enter_dfu_btn.setText(self.tr("1. DFU Mode"))
         self.check_dfu_btn.setText(self.tr("2. Check DFU"))
@@ -353,7 +387,7 @@ class FirmwareTab(BaseTab):
         self.enter_dfu_btn.setEnabled(is_connected)
         if not is_connected: self.reset_device_info_labels()
 
-    def populate_fields(self): self.read_firmware_info()
+    def populate_fields(self): self.read_firmware_info(); self._update_detected_board()
     
     def read_firmware_info(self):
         odrv = self.get_odrv()
@@ -373,6 +407,99 @@ class FirmwareTab(BaseTab):
             try: odrv.enter_dfu_mode()
             except Exception: pass
             finally: self.main_window.show_status_message(self.tr("DFU command sent."), AppColors.WARNING, 5000)
+
+
+    # --------------------------------------------- automatic firmware download ---
+
+    def _update_detected_board(self):
+        """
+        Shows which firmware file this board needs. The hardware version is only
+        readable over the normal protocol, so this has to happen before DFU, which is
+        also why downloading is offered as the step before entering DFU.
+        """
+        if not self.main_window.is_connected or not self.main_window.odrv_proxy:
+            self.detected_board_label.setText(self.tr("Connect to the ODrive to detect which firmware it needs."))
+            self.detected_board_label.setStyleSheet("font-style: italic;")
+            self.download_btn.setEnabled(False)
+            return
+        try:
+            odrv = self.main_window.odrv_proxy.odrv
+            major, minor = odrv.hw_version_major, odrv.hw_version_minor
+            variant = getattr(odrv, 'hw_version_variant', None)
+        except Exception:
+            self.detected_board_label.setText(self.tr("Could not read the hardware version."))
+            self.detected_board_label.setStyleSheet(f"color: {AppColors.ERROR};")
+            self.download_btn.setEnabled(False)
+            return
+
+        asset = expected_asset_name(major, minor, variant)
+        if not asset:
+            # Never guess the voltage variant: the wrong one sets the wrong voltage
+            # limits on the board.
+            self.detected_board_label.setText(self.tr(
+                "This board did not report its voltage variant, so the right firmware cannot be "
+                "identified. Select the file manually."))
+            self.detected_board_label.setStyleSheet(f"color: {AppColors.WARNING};")
+            self.download_btn.setEnabled(False)
+            return
+
+        self.detected_board_label.setText(self.tr("Detected ODrive v{0}.{1} {2}V, needs <b>{3}</b>").format(
+            major, minor, variant, asset))
+        self.detected_board_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
+        self.download_btn.setEnabled(self.download_thread is None)
+
+    def start_firmware_download(self):
+        """Fetches the release asset matching this board, before DFU is entered."""
+        if self.download_thread is not None:
+            return
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        try:
+            asset = expected_asset_name(odrv.hw_version_major, odrv.hw_version_minor,
+                                        getattr(odrv, 'hw_version_variant', None))
+        except Exception:
+            asset = None
+        if not asset:
+            QMessageBox.warning(self, self.tr("Unknown Board"), self.tr(
+                "The hardware version could not be read, so the matching firmware cannot be chosen."))
+            return
+
+        self.download_btn.setEnabled(False)
+        self.download_progress.setValue(0)
+        self.download_thread = QThread()
+        self.download_worker = FirmwareDownloadWorker(self.fw_version_combo.currentText(), asset)
+        self.download_worker.moveToThread(self.download_thread)
+        self.download_thread.started.connect(self.download_worker.run)
+        self.download_worker.progress.connect(self._on_download_progress)
+        self.download_worker.result.connect(self._on_download_result)
+        self.download_worker.finished.connect(self.download_thread.quit)
+        self.download_worker.finished.connect(self.download_worker.deleteLater)
+        self.download_thread.finished.connect(self.download_thread.deleteLater)
+        self.download_thread.finished.connect(self._on_download_thread_finished)
+        self.download_thread.start()
+
+    def _on_download_progress(self, message, percent):
+        self.download_progress.setValue(percent)
+        self.flash_status_display.append(message)
+
+    def _on_download_result(self, success, message, path):
+        if not success:
+            QMessageBox.warning(self, self.tr("Download Failed"), message)
+            return
+        # Hand the file to the existing flash flow, exactly as picking it by hand does.
+        self.selected_firmware_path = path
+        self.selected_file_label.setText(self.tr("<b>Ready to flash:</b> {0}").format(os.path.basename(path)))
+        self.selected_file_label.setStyleSheet(f"color: {AppColors.SUCCESS}; font-style: normal;")
+        self.install_fw_btn.setEnabled(self._is_dfu_found)
+        self.flash_status_display.append(message)
+        QMessageBox.information(self, self.tr("Download Complete"), self.tr(
+            "{0}\n\nNow put the ODrive in DFU mode, check for it, and install.").format(message))
+
+    def _on_download_thread_finished(self):
+        self.download_thread, self.download_worker = None, None
+        self._update_detected_board()
 
     def show_missing_prereq_error(self):
         msg_box = QMessageBox(self)
