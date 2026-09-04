@@ -57,7 +57,9 @@ class AlignmentTab(BaseTab):
         self.current_input = QDoubleSpinBox()
         self.current_input.setRange(1.0, 60.0)
         self.current_input.setDecimals(1)
-        self.current_input.setValue(10.0)
+        # Only has to spin an unloaded motor at the test speed. Higher buys nothing and
+        # heats the motor at the badly commutated offsets; the worker warns if it is low.
+        self.current_input.setValue(5.0)
         self.current_input.setSuffix(" A")
 
         # 32 coarse and 21 fine points land within a fraction of an electrical degree
@@ -143,7 +145,7 @@ class AlignmentTab(BaseTab):
         self.label_settle.setText(self.tr("Settle time per point:"))
 
         self.velocity_input.setToolTip(self.tr("Speed the motor spins at while each offset is scored."))
-        self.current_input.setToolTip(self.tr("Temporarily replaces the motor current limit during the sweep.\nKeep it low: badly commutated offsets will draw whatever is allowed."))
+        self.current_input.setToolTip(self.tr("Temporarily replaces the motor current limit during the sweep.\n\nOnly needs to be high enough to spin the motor at the test speed when well aligned. Raising it further adds heat at the badly commutated offsets without improving the result."))
         self.coarse_input.setToolTip(self.tr("How many offsets are tested across one full electrical revolution."))
         self.fine_input.setToolTip(self.tr("Extra points tested around the coarse winner."))
         self.revolutions_input.setToolTip(self.tr("Sampling over whole mechanical revolutions averages cogging out."))

@@ -44,6 +44,7 @@ class OffsetAlignmentWorker(QObject):
         self.settle_s = settle_s
         self._is_running = True
         self._saved = {}
+        self._arm_failure = None
 
     def stop(self):
         """Signals the sweep to unwind at the next checkpoint."""
@@ -127,6 +128,15 @@ class OffsetAlignmentWorker(QObject):
             if axis.current_state == AXIS_STATE_CLOSED_LOOP_CONTROL:
                 return True
             time.sleep(0.05)
+
+        # Record why the drive refused, so a sweep that fails everywhere can say what
+        # went wrong instead of only reporting that it did.
+        try:
+            self._arm_failure = (
+                f"axis={hex(axis.error)} motor={hex(axis.motor.error)} "
+                f"encoder={hex(axis.encoder.error)} controller={hex(axis.controller.error)}")
+        except Exception:
+            pass
         return False
 
     # -------------------------------------------------------------- sampling ---
@@ -299,20 +309,58 @@ class OffsetAlignmentWorker(QObject):
             finite = {k: sum(v) / len(v) for k, v in all_readings.items()
                       if all(math.isfinite(x) for x in v)}
 
+            # A point scores infinite when the axis refused to arm at that offset. A few
+            # are expected at badly commutated offsets, but if most of them failed there
+            # is no usable minimum and picking one anyway produces a confident, wrong
+            # answer. Fail instead.
+            usable_ratio = len(finite) / max(len(all_readings), 1)
+            if usable_ratio < 0.5:
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "Only {0} of {1} offsets could be measured; the axis would not stay in closed "
+                    "loop at the rest. Without most points there is no reliable minimum.\n\n"
+                    "Usually the sweep current limit is too low to turn the motor, or the axis is "
+                    "faulting during the sweep. Check 'Show Errors', raise the sweep current a "
+                    "little, and try again.{2}").format(
+                        len(finite), len(all_readings),
+                        ("\n\nLast refusal: " + self._arm_failure) if self._arm_failure else ""))
+
             best_current = finite.get(best_offset)
             worst_current = max(finite.values()) if finite else None
+            if best_current is None:
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "The winning offset had no valid current reading, so the result cannot be "
+                    "trusted. Nothing was changed."))
 
             delta = best_offset - original_offset
             # Express the shift as the shortest way round the electrical cycle.
             delta = (delta + counts_per_electrical_rev / 2) % counts_per_electrical_rev \
                 - counts_per_electrical_rev / 2
             electrical_degrees = delta * 360.0 / counts_per_electrical_rev
+
+            # This routine refines an existing calibration. A shift beyond a quarter turn
+            # electrical is not a refinement, it is a different commutation point, and in
+            # practice means the sweep measured noise. Refuse rather than apply it.
+            if abs(electrical_degrees) > 90.0:
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "The sweep landed {0:.1f} electrical degrees from the calibrated offset. That "
+                    "is a different commutation point, not a refinement, so it was not applied.\n\n"
+                    "This usually means the measurements were noise: the motor may not have been "
+                    "turning freely, or the sweep current limit was too low to move it.")
+                    .format(electrical_degrees))
+
+            # Torque scales with cos(error), so this stays within 0-100% by construction
+            # once the shift is inside a quarter turn.
             torque_recovered = (1.0 - math.cos(math.radians(electrical_degrees))) * 100.0
 
             setattr(offset_config, offset_attr, int(best_offset))
 
             lines = [
                 QCoreApplication.translate("OffsetAlignmentWorker", "Best alignment found: {0}").format(best_offset),
+                QCoreApplication.translate("OffsetAlignmentWorker",
+                    "Measured {0} of {1} offsets successfully.").format(len(finite), len(all_readings)),
             ]
             if best_current is not None and worst_current is not None:
                 lines.append(QCoreApplication.translate(
@@ -325,6 +373,18 @@ class OffsetAlignmentWorker(QObject):
                 "OffsetAlignmentWorker", "Difference: {0} counts = {1:.1f} electrical degrees, "
                 "which was costing about {2:.1f}% of torque.")
                 .format(int(delta), electrical_degrees, torque_recovered))
+            lines.append("")
+            # If even the best offset needed most of the allowed current, the motor was
+            # current-starved and every point sat against the limit, which makes the
+            # minimum meaningless. Say so rather than presenting a confident number.
+            if best_current is not None and best_current > 0.5 * self.current_limit:
+                lines.append("")
+                lines.append(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "Warning: the best point still drew {0:.2f} A of the {1:.1f} A allowed. The "
+                    "sweep was probably starved of current, so this result is unreliable. Raise "
+                    "the sweep current limit and run it again.").format(best_current, self.current_limit))
+
             lines.append("")
             lines.append(QCoreApplication.translate(
                 "OffsetAlignmentWorker",

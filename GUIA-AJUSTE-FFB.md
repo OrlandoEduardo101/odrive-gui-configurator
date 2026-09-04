@@ -54,13 +54,23 @@ A calibração nativa da ODrive empurra o rotor contra cogging e atrito, e num d
 pode parar alguns graus elétricos fora do alinhamento real. Esse erro divide a corrente
 comandada: só `cos(erro)` vira torque, o resto vira calor.
 
-**Primeira execução — use valores conservadores:**
+| Parâmetro | Valor |
+|---|---|
+| Limite de corrente | **5 A** |
+| Velocidade de teste | 3 turns/s |
+| Pontos grosso / fino | 32 / 21 |
 
-| Parâmetro | Primeira vez | Depois |
-|---|---|---|
-| Limite de corrente | **5 A** | 10 A |
-| Velocidade de teste | 3 turns/s | 3 turns/s |
-| Pontos grosso / fino | 32 / 21 | 32 / 21 |
+**Não existe escalada de corrente.** Subir o limite não melhora o resultado. No offset
+correto a corrente é definida pelo atrito do motor, não pelo teto; nos offsets errados ela
+apenas satura no limite. Como a rotina procura o *mínimo*, um teto maior só gera calor nos
+pontos ruins.
+
+O limite só precisa ser alto o bastante para o motor girar na velocidade de teste quando
+bem alinhado. Para um direct drive a 3 turns/s sem carga, 5 A é folgado — e provavelmente
+serve para sempre.
+
+**Se ficou baixo demais**, a rotina avisa: quando a corrente do melhor ponto passa de
+metade do limite, o resultado é marcado como não confiável. Aí sim, suba o limite e repita.
 
 O motor **gira sozinho, nos dois sentidos**, inclusive passando por offsets mal comutados
 onde ele solavanca e puxa corrente. Libere o eixo antes.

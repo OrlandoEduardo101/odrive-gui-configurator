@@ -2405,6 +2405,14 @@ Details: {0}</source>
 
 Detalhes: {0}</translation>
     </message>
+    <message>
+        <source>Temporarily replaces the motor current limit during the sweep.
+
+Only needs to be high enough to spin the motor at the test speed when well aligned. Raising it further adds heat at the badly commutated offsets without improving the result.</source>
+        <translation>Substitui temporariamente o limite de corrente do motor durante a varredura.
+
+Só precisa ser alto o bastante para girar o motor na velocidade de teste quando bem alinhado. Aumentar mais só gera calor nos offsets mal comutados, sem melhorar o resultado.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -2499,6 +2507,34 @@ Please report these so the routine can support your firmware.</source>
         <translation>Esta placa tem: {0}
 
 Reporte estas propriedades para que a rotina possa suportar o seu firmware.</translation>
+    </message>
+    <message>
+        <source>Warning: the best point still drew {0:.2f} A of the {1:.1f} A allowed. The sweep was probably starved of current, so this result is unreliable. Raise the sweep current limit and run it again.</source>
+        <translation>Atenção: o melhor ponto ainda puxou {0:.2f} A dos {1:.1f} A permitidos. A varredura provavelmente ficou estrangulada de corrente, então este resultado não é confiável. Aumente o limite de corrente da varredura e repita.</translation>
+    </message>
+    <message>
+        <source>The winning offset had no valid current reading, so the result cannot be trusted. Nothing was changed.</source>
+        <translation>O offset vencedor não teve leitura de corrente válida, então o resultado não é confiável. Nada foi alterado.</translation>
+    </message>
+    <message>
+        <source>Measured {0} of {1} offsets successfully.</source>
+        <translation>Medidos {0} de {1} offsets com sucesso.</translation>
+    </message>
+    <message>
+        <source>Only {0} of {1} offsets could be measured; the axis would not stay in closed loop at the rest. Without most points there is no reliable minimum.
+
+Usually the sweep current limit is too low to turn the motor, or the axis is faulting during the sweep. Check &apos;Show Errors&apos;, raise the sweep current a little, and try again.{2}</source>
+        <translation>Só {0} de {1} offsets puderam ser medidos; nos demais o eixo não permaneceu em malha fechada. Sem a maioria dos pontos não existe um mínimo confiável.
+
+Normalmente o limite de corrente da varredura está baixo demais para girar o motor, ou o eixo está dando erro durante a varredura. Veja &apos;Mostrar Erros&apos;, aumente um pouco a corrente da varredura e tente de novo.{2}</translation>
+    </message>
+    <message>
+        <source>The sweep landed {0:.1f} electrical degrees from the calibrated offset. That is a different commutation point, not a refinement, so it was not applied.
+
+This usually means the measurements were noise: the motor may not have been turning freely, or the sweep current limit was too low to move it.</source>
+        <translation>A varredura parou a {0:.1f} graus elétricos do offset calibrado. Isso é um ponto de comutação diferente, não um refino, então não foi aplicado.
+
+Normalmente isso significa que as medições foram ruído: o motor pode não estar girando livremente, ou a corrente da varredura estava baixa demais para movê-lo.</translation>
     </message>
 </context>
 <context>
