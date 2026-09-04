@@ -2519,6 +2519,22 @@ Reporte estas propriedades para que a rotina possa suportar o seu firmware.</tra
         <source>FFB Preset</source>
         <translation>Preset FFB</translation>
     </message>
+    <message>
+        <source>1. Alignment</source>
+        <translation>1. Alinhamento</translation>
+    </message>
+    <message>
+        <source>2. Kt Measurement</source>
+        <translation>2. Medição de Kt</translation>
+    </message>
+    <message>
+        <source>3. Safety</source>
+        <translation>3. Segurança</translation>
+    </message>
+    <message>
+        <source>4. FFB Preset</source>
+        <translation>4. Preset FFB</translation>
+    </message>
 </context>
 <context>
     <name>SafetyTab</name>

@@ -48,7 +48,7 @@ Sem o índice Z o offset é recalculado a cada boot, e todo o trabalho da etapa 
 
 ## 2. Alinhamento do offset elétrico
 
-**Ajustes → Alinhamento.** É a etapa que resolve superaquecimento.
+**Ajustes → 1. Alinhamento.** É a etapa que resolve superaquecimento.
 
 A calibração nativa da ODrive empurra o rotor contra cogging e atrito, e num direct drive
 pode parar alguns graus elétricos fora do alinhamento real. Esse erro divide a corrente
@@ -74,7 +74,7 @@ elétricos e o torque recuperado.
 
 ## 3. Medir o Kt
 
-**Ajustes → Medição de Kt.** Dois métodos; rode o automático primeiro.
+**Ajustes → 2. Medição de Kt.** Dois métodos; rode o automático primeiro.
 
 ### 3a. Automático (back-EMF) — sem hardware extra
 
@@ -121,14 +121,14 @@ Exemplo: motor de 10 Nm com Kt medido de 0,49 → `10 / 0,49 = 20,4 A`.
 térmica do *seu* motor. O mesmo 35 A que funciona no motor de alguém pode significar
 17 Nm no seu — muito acima do que ele aguenta.
 
-Aba **Motor** → `Current Limit`. Depois **Ajustes → Segurança** mostra o pico em Nm que
+Aba **Motor** → `Current Limit`. Depois **Ajustes → 3. Segurança** mostra o pico em Nm que
 isso representa, para conferir.
 
 ---
 
 ## 5. Proteção térmica
 
-**Ajustes → Segurança.** A ODrive 3.6 tem termistor de FET embarcado — é leitura grátis.
+**Ajustes → 3. Segurança.** A ODrive 3.6 tem termistor de FET embarcado — é leitura grátis.
 
 Entre o limite inferior e o superior a corrente é **reduzida gradualmente**; acima do
 superior dá erro e desarma. Num volante essa faixa importa: um corte seco no meio da
@@ -163,7 +163,7 @@ antes de habilitar.
 
 ## 7. Preset FFB
 
-**Ajustes → Preset FFB.** Tabela de atual → proposto, grava só o que difere.
+**Ajustes → 4. Preset FFB.** Tabela de atual → proposto, grava só o que difere.
 
 Confira o **Node ID** e a **taxa do CAN** contra a config do seu OpenFFBoard
 (padrão: node 0, 500000).
@@ -203,12 +203,12 @@ voltar a cozinhar o motor.
 | # | Etapa | Onde | Salvar depois |
 |---|---|---|---|
 | 1 | Índice Z + pre_calibrated | Encoder / Motor | sim |
-| 2 | Alinhamento do offset | Ajustes → Alinhamento | sim |
-| 3 | Medir e aplicar Kt | Ajustes → Medição de Kt | sim |
+| 2 | Alinhamento do offset | Ajustes → 1. Alinhamento | sim |
+| 3 | Medir e aplicar Kt | Ajustes → 2. Medição de Kt | sim |
 | 4 | `current_lim` | Motor | sim |
-| 5 | Limites térmicos | Ajustes → Segurança | sim |
-| 6 | Watchdog | Ajustes → Segurança | sim |
-| 7 | Preset FFB | Ajustes → Preset FFB | sim + reboot |
+| 5 | Limites térmicos | Ajustes → 3. Segurança | sim |
+| 6 | Watchdog | Ajustes → 3. Segurança | sim |
+| 7 | Preset FFB | Ajustes → 4. Preset FFB | sim + reboot |
 | 8 | `maxtorque` | OpenFFBoard | — |
 
 **Save Configuration exige estado IDLE.** O botão de estado do eixo alterna entre IDLE e

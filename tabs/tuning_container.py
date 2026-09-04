@@ -30,7 +30,7 @@ class TuningContainer(BaseTab):
         # Each sub-tab scrolls rather than compressing. These pages are taller than the
         # window's minimum height, and without this the groups inside get crushed into
         # unreadable slivers instead of simply scrolling.
-        for widget in (self.kt_tab, self.alignment_tab, self.safety_tab, self.preset_tab):
+        for widget in self.ordered_tabs():
             area = QScrollArea()
             area.setWidgetResizable(True)
             area.setFrameShape(QFrame.Shape.NoFrame)
@@ -39,6 +39,18 @@ class TuningContainer(BaseTab):
         layout.addWidget(self.inner_tabs)
         self.retranslate_ui()
 
+    def ordered_tabs(self):
+        """
+        The sub-tabs in the order they must be run.
+
+        Alignment comes before Kt because a misaligned dq frame skews the current
+        readings the Kt measurement depends on. Safety follows, since the current limit
+        it guards only becomes meaningful once Kt is known. The FFB preset is last:
+        it arms the drive on boot, which is what stops OpenFFBoard from recalibrating
+        over the alignment.
+        """
+        return (self.alignment_tab, self.kt_tab, self.safety_tab, self.preset_tab)
+
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslate_ui()
@@ -46,11 +58,11 @@ class TuningContainer(BaseTab):
 
     def retranslate_ui(self):
         """Re-translates this container's tab labels and every sub-tab."""
-        self.inner_tabs.setTabText(0, self.tr("Kt Measurement"))
-        self.inner_tabs.setTabText(1, self.tr("Alignment"))
-        self.inner_tabs.setTabText(2, self.tr("Safety"))
-        self.inner_tabs.setTabText(3, self.tr("FFB Preset"))
-        for widget in (self.kt_tab, self.alignment_tab, self.safety_tab, self.preset_tab):
+        # Numbered so the required order is visible rather than implied.
+        for index, text in enumerate((self.tr("1. Alignment"), self.tr("2. Kt Measurement"),
+                                      self.tr("3. Safety"), self.tr("4. FFB Preset"))):
+            self.inner_tabs.setTabText(index, text)
+        for widget in self.ordered_tabs():
             widget.retranslate_ui()
 
     # ----------------------------------------------------- signal fan-out ---
