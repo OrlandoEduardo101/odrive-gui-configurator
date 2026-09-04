@@ -2572,6 +2572,22 @@ This usually means the measurements were noise: the motor may not have been turn
 
 Normalmente isso significa que as medições foram ruído: o motor pode não estar girando livremente, ou a corrente da varredura estava baixa demais para movê-lo.{1}</translation>
     </message>
+    <message>
+        <source>Checking the calibrated offset first...</source>
+        <translation>Conferindo primeiro o offset calibrado...</translation>
+    </message>
+    <message>
+        <source>At the calibrated offset the motor only reached {0:.2f} turns/s of the {1:.2f} asked for, drawing {2:.2f} A of the {3:.1f} A allowed.
+
+Commutation is fine there, so the sweep settings are the problem. Raise the sweep current limit, or lower the test velocity, and try again.</source>
+        <translation>No offset calibrado o motor só atingiu {0:.2f} voltas/s das {1:.2f} pedidas, puxando {2:.2f} A dos {3:.1f} A permitidos.
+
+A comutação ali está boa, então o problema são os parâmetros da varredura. Aumente o limite de corrente da varredura, ou reduza a velocidade de teste, e tente de novo.</translation>
+    </message>
+    <message>
+        <source>At the old offset it needed {0:.2f} A, so this saves {1:.1f}%.</source>
+        <translation>No offset antigo ele precisava de {0:.2f} A, então isto economiza {1:.1f}%.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>

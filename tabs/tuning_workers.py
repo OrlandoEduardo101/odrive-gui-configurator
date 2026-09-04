@@ -222,17 +222,6 @@ class OffsetAlignmentWorker(QObject):
         for i, offset in enumerate(offsets):
             if not self._is_running:
                 return None
-            # Check the very first point: if the motor barely turns, every later reading
-            # is noise too, and there is no reason to spend minutes collecting it.
-            if self._velocities and len(self._velocities) == 1:
-                reached = self._velocities[0]
-                if reached < 0.3 * abs(velocity):
-                    raise RuntimeError(QCoreApplication.translate(
-                        "OffsetAlignmentWorker",
-                        "The motor only reached {0:.2f} turns/s of the {1:.2f} asked for.\n\n"
-                        "At that speed the current says nothing about alignment. Raise the sweep "
-                        "current limit, or lower the test velocity, and try again.")
-                        .format(reached, abs(velocity)))
             pct = base_pct + int(span_pct * i / max(len(offsets), 1))
             self.progress.emit(
                 QCoreApplication.translate("OffsetAlignmentWorker", "{0}: offset {1} ({2}/{3})")
@@ -305,6 +294,29 @@ class OffsetAlignmentWorker(QObject):
             first = original_offset - counts_per_electrical_rev / 2.0
             coarse_offsets = [round(first + i * step) % cpr
                               for i in range(self.coarse_points)]
+
+            # Reference point at the calibrated offset, where commutation is known to be
+            # good. If the motor cannot hold speed even here, the sweep settings are wrong
+            # and every later reading would be noise. Checking the first swept point
+            # instead would be useless: the window is centred, so that point is
+            # deliberately half an electrical revolution off, the worst case there is.
+            self.progress.emit(QCoreApplication.translate(
+                "OffsetAlignmentWorker", "Checking the calibrated offset first..."), 0)
+            reference_current = self._measure_at(original_offset, self.velocity,
+                                                 offset_config, offset_attr)
+            if reference_current is None:
+                raise InterruptedError
+            reference_speed = self._velocities[-1] if self._velocities else 0.0
+            if reference_speed < 0.3 * self.velocity:
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "At the calibrated offset the motor only reached {0:.2f} turns/s of the "
+                    "{1:.2f} asked for, drawing {2:.2f} A of the {3:.1f} A allowed.\n\n"
+                    "Commutation is fine there, so the sweep settings are the problem. Raise the "
+                    "sweep current limit, or lower the test velocity, and try again.").format(
+                        reference_speed, self.velocity,
+                        reference_current if math.isfinite(reference_current) else float('nan'),
+                        self.current_limit))
 
             best_per_direction = []
             readings_by_direction = {}
@@ -379,7 +391,18 @@ class OffsetAlignmentWorker(QObject):
                         len(finite), len(all_readings),
                         ("\n\nLast refusal: " + self._arm_failure) if self._arm_failure else ""))
 
-            best_current = finite.get(best_offset)
+            # The circular mean lands between grid points, so its exact value is usually
+            # not one of the measured offsets. Report the reading from the nearest one
+            # rather than treating the miss as missing data.
+            def circular_distance(a, b):
+                gap = abs(a - b) % counts_per_electrical_rev
+                return min(gap, counts_per_electrical_rev - gap)
+
+            best_current = None
+            if finite:
+                nearest = min(finite, key=lambda o: circular_distance(o, best_offset))
+                if circular_distance(nearest, best_offset) <= step:
+                    best_current = finite[nearest]
             worst_current = max(finite.values()) if finite else None
             if best_current is None:
                 raise RuntimeError(QCoreApplication.translate(
@@ -424,6 +447,12 @@ class OffsetAlignmentWorker(QObject):
                 lines.append(QCoreApplication.translate(
                     "OffsetAlignmentWorker", "Current there: {0:.2f} A (worst point tested: {1:.2f} A)")
                     .format(best_current, worst_current))
+            if best_current is not None and math.isfinite(reference_current) and reference_current > 0:
+                lines.append(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "At the old offset it needed {0:.2f} A, so this saves {1:.1f}%.").format(
+                        reference_current,
+                        100.0 * (reference_current - best_current) / reference_current))
             lines.append("")
             lines.append(QCoreApplication.translate(
                 "OffsetAlignmentWorker", "Calibration had left {0}.").format(original_offset))
