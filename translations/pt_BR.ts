@@ -2588,6 +2588,26 @@ A comutação ali está boa, então o problema são os parâmetros da varredura.
         <source>At the old offset it needed {0:.2f} A, so this saves {1:.1f}%.</source>
         <translation>No offset antigo ele precisava de {0:.2f} A, então isto economiza {1:.1f}%.</translation>
     </message>
+    <message>
+        <source>No offset held the commanded speed. Speeds ranged {0:.2f} to {1:.2f} turns/s against the {2:.2f} asked for.
+
+The motor is either stalling or running away at these offsets, so the current drawn cannot be compared between them. Try a lower test velocity, and raise the sweep current limit if it was stalling.</source>
+        <translation>Nenhum offset segurou a velocidade comandada. As velocidades variaram de {0:.2f} a {1:.2f} voltas/s contra as {2:.2f} pedidas.
+
+O motor está travando ou disparando nesses offsets, então a corrente puxada não pode ser comparada entre eles. Tente uma velocidade de teste menor, e aumente o limite de corrente da varredura se ele estava travando.</translation>
+    </message>
+    <message>
+        <source>Only {0} of {1} offsets gave a comparable reading. At the rest the axis would not arm, or the motor stalled or ran away instead of holding the commanded speed. Without most points there is no reliable minimum.
+
+Try a lower test velocity, and raise the sweep current limit if the motor was stalling. Check &apos;Show Errors&apos; too.{2}</source>
+        <translation>Só {0} de {1} offsets deram leitura comparável. Nos demais o eixo não armou, ou o motor travou ou disparou em vez de segurar a velocidade comandada. Sem a maioria dos pontos não existe um mínimo confiável.
+
+Tente uma velocidade de teste menor, e aumente o limite de corrente da varredura se o motor estava travando. Veja também &apos;Mostrar Erros&apos;.{2}</translation>
+    </message>
+    <message>
+        <source>Speed held on those: {0:.2f} turns/s of {1:.2f} asked.</source>
+        <translation>Velocidade mantida nesses: {0:.2f} voltas/s de {1:.2f} pedidas.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>

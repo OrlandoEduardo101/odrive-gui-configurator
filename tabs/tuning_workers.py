@@ -158,7 +158,7 @@ class OffsetAlignmentWorker(QObject):
             # Refusing to arm is itself a symptom of a hopeless offset; score it as
             # the worst possible so the sweep moves on instead of aborting.
             self._go_idle()
-            return float('inf')
+            return float('inf'), 0.0
 
         axis = self.odrv.axis0
         axis.controller.input_vel = velocity
@@ -189,12 +189,37 @@ class OffsetAlignmentWorker(QObject):
         self._go_idle()
 
         if not samples:
-            return float('inf')
+            return float('inf'), 0.0
         # The speed actually reached decides whether the current reading means anything:
-        # a motor that never got moving draws a current unrelated to its alignment.
+        # a motor that stalled, or that ran away because commutation was wrong, draws a
+        # current unrelated to its alignment.
+        achieved = sum(speeds) / len(speeds) if speeds else 0.0
         if speeds:
-            self._velocities.append(sum(speeds) / len(speeds))
-        return sum(samples) / len(samples)
+            self._velocities.append(achieved)
+        return sum(samples) / len(samples), achieved
+
+    # A point only compares with the others if the motor actually held the commanded
+    # speed there. Badly commutated offsets either stall or run away, and in both cases
+    # the current drawn says nothing about how close the alignment is.
+    SPEED_TOLERANCE = 0.25
+
+    def _held_speed(self, achieved):
+        return abs(achieved - self.velocity) <= self.SPEED_TOLERANCE * self.velocity
+
+    def _speed_valid(self, readings):
+        """Filters a sweep's readings down to the points that held the commanded speed."""
+        return {offset: current for offset, (current, speed) in readings.items()
+                if math.isfinite(current) and self._held_speed(speed)}
+
+    def _no_valid_speed_message(self, readings):
+        speeds = [speed for _, speed in readings.values()]
+        return QCoreApplication.translate(
+            "OffsetAlignmentWorker",
+            "No offset held the commanded speed. Speeds ranged {0:.2f} to {1:.2f} turns/s "
+            "against the {2:.2f} asked for.\n\nThe motor is either stalling or running away "
+            "at these offsets, so the current drawn cannot be compared between them. Try a "
+            "lower test velocity, and raise the sweep current limit if it was stalling."
+        ).format(min(speeds) if speeds else 0.0, max(speeds) if speeds else 0.0, self.velocity)
 
     def _measurement_summary(self, finite):
         """
@@ -302,11 +327,11 @@ class OffsetAlignmentWorker(QObject):
             # deliberately half an electrical revolution off, the worst case there is.
             self.progress.emit(QCoreApplication.translate(
                 "OffsetAlignmentWorker", "Checking the calibrated offset first..."), 0)
-            reference_current = self._measure_at(original_offset, self.velocity,
-                                                 offset_config, offset_attr)
-            if reference_current is None:
+            reference = self._measure_at(original_offset, self.velocity,
+                                         offset_config, offset_attr)
+            if reference is None:
                 raise InterruptedError
-            reference_speed = self._velocities[-1] if self._velocities else 0.0
+            reference_current, reference_speed = reference
             if reference_speed < 0.3 * self.velocity:
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
@@ -332,7 +357,10 @@ class OffsetAlignmentWorker(QObject):
                 if coarse is None:
                     raise InterruptedError
 
-                best_coarse = min(coarse, key=coarse.get)
+                usable_coarse = self._speed_valid(coarse)
+                if not usable_coarse:
+                    raise RuntimeError(self._no_valid_speed_message(coarse))
+                best_coarse = min(usable_coarse, key=usable_coarse.get)
 
                 # Refine around the coarse winner, one coarse step to either side.
                 fine_span = step
@@ -351,7 +379,10 @@ class OffsetAlignmentWorker(QObject):
                 combined = dict(coarse)
                 combined.update(fine)
                 readings_by_direction[direction] = combined
-                best_per_direction.append(min(combined, key=combined.get))
+                usable = self._speed_valid(combined)
+                if not usable:
+                    raise RuntimeError(self._no_valid_speed_message(combined))
+                best_per_direction.append(min(usable, key=usable.get))
 
             # Averaging the two directions cancels the encoder's velocity dependent
             # phase lag, which otherwise biases the optimum one way per direction.
@@ -370,10 +401,14 @@ class OffsetAlignmentWorker(QObject):
 
             all_readings = {}
             for readings in readings_by_direction.values():
-                for key, value in readings.items():
-                    all_readings.setdefault(key, []).append(value)
-            finite = {k: sum(v) / len(v) for k, v in all_readings.items()
-                      if all(math.isfinite(x) for x in v)}
+                for key, (current, speed) in readings.items():
+                    all_readings.setdefault(key, []).append((current, speed))
+            finite, held_speeds = {}, []
+            for key, pairs in all_readings.items():
+                valid = [(c, sp) for c, sp in pairs if math.isfinite(c) and self._held_speed(sp)]
+                if len(valid) == len(pairs):
+                    finite[key] = sum(c for c, _ in valid) / len(valid)
+                    held_speeds.extend(sp for _, sp in valid)
 
             # A point scores infinite when the axis refused to arm at that offset. A few
             # are expected at badly commutated offsets, but if most of them failed there
@@ -383,11 +418,11 @@ class OffsetAlignmentWorker(QObject):
             if usable_ratio < 0.5:
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
-                    "Only {0} of {1} offsets could be measured; the axis would not stay in closed "
-                    "loop at the rest. Without most points there is no reliable minimum.\n\n"
-                    "Usually the sweep current limit is too low to turn the motor, or the axis is "
-                    "faulting during the sweep. Check 'Show Errors', raise the sweep current a "
-                    "little, and try again.{2}").format(
+                    "Only {0} of {1} offsets gave a comparable reading. At the rest the axis "
+                    "would not arm, or the motor stalled or ran away instead of holding the "
+                    "commanded speed. Without most points there is no reliable minimum.\n\n"
+                    "Try a lower test velocity, and raise the sweep current limit if the motor "
+                    "was stalling. Check 'Show Errors' too.{2}").format(
                         len(finite), len(all_readings),
                         ("\n\nLast refusal: " + self._arm_failure) if self._arm_failure else ""))
 
@@ -439,8 +474,8 @@ class OffsetAlignmentWorker(QObject):
                 QCoreApplication.translate("OffsetAlignmentWorker",
                     "Measured {0} of {1} offsets successfully.").format(len(finite), len(all_readings)),
                 QCoreApplication.translate("OffsetAlignmentWorker",
-                    "Speed held: {0:.2f} turns/s of {1:.2f} asked.").format(
-                        sum(self._velocities) / len(self._velocities) if self._velocities else 0.0,
+                    "Speed held on those: {0:.2f} turns/s of {1:.2f} asked.").format(
+                        sum(held_speeds) / len(held_speeds) if held_speeds else 0.0,
                         self.velocity),
             ]
             if best_current is not None and worst_current is not None:
