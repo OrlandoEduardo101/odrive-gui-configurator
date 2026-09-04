@@ -2484,6 +2484,22 @@ The original offset was restored.</source>
 
 O offset original foi restaurado.</translation>
     </message>
+    <message>
+        <source>Could not find the electrical offset property on this firmware.
+
+Tried: {0}</source>
+        <translation>Não foi possível encontrar a propriedade de offset elétrico neste firmware.
+
+Tentadas: {0}</translation>
+    </message>
+    <message>
+        <source>This board does have: {0}
+
+Please report these so the routine can support your firmware.</source>
+        <translation>Esta placa tem: {0}
+
+Reporte estas propriedades para que a rotina possa suportar o seu firmware.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>

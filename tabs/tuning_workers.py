@@ -51,24 +51,44 @@ class OffsetAlignmentWorker(QObject):
 
     # ------------------------------------------------------- firmware probe ---
 
+    # Where the electrical offset lives, newest naming first. Firmware 0.5.6 calls it
+    # encoder.config.phase_offset; earlier 0.5.x releases called it encoder.config.offset.
+    OFFSET_CANDIDATES = [
+        ('encoder', 'phase_offset'),
+        ('encoder', 'offset'),
+        ('motor', 'phase_offset'),
+    ]
+
     def _resolve_offset_property(self):
         """
-        Finds where this firmware keeps the electrical offset. Firmware 0.5.x uses
-        axis.encoder.config.offset, while later versions moved it to
-        axis.motor.config.phase_offset. Returns (owner_config, attribute_name).
+        Finds where this firmware keeps the electrical offset.
+        Returns (owner_config, attribute_name), or (None, None) when none is present.
         """
         axis = self.odrv.axis0
-        candidates = [
-            (axis.encoder.config, 'offset'),
-            (axis.motor.config, 'phase_offset'),
-        ]
-        for config, attr in candidates:
+        for owner_name, attr in self.OFFSET_CANDIDATES:
             try:
+                config = getattr(getattr(axis, owner_name), 'config')
                 if hasattr(config, attr):
                     return config, attr
             except Exception:
                 continue
         return None, None
+
+    def _offset_diagnostics(self):
+        """
+        Lists the offset-looking properties this board actually has, so a firmware whose
+        naming is not covered above reports what to add instead of just failing.
+        """
+        found = []
+        for owner_name in ('encoder', 'motor'):
+            try:
+                config = getattr(getattr(self.odrv.axis0, owner_name), 'config')
+                for name in dir(config):
+                    if 'offset' in name.lower() and not name.startswith('_'):
+                        found.append(f"{owner_name}.config.{name}")
+            except Exception:
+                continue
+        return found
 
     def _read_current(self):
         """
@@ -182,10 +202,18 @@ class OffsetAlignmentWorker(QObject):
         """Executes the full alignment sweep and restores the drive afterwards."""
         offset_config, offset_attr = self._resolve_offset_property()
         if offset_config is None:
-            self.result.emit(False, QCoreApplication.translate(
+            tried = ", ".join(f"{owner}.config.{attr}" for owner, attr in self.OFFSET_CANDIDATES)
+            found = self._offset_diagnostics()
+            message = QCoreApplication.translate(
                 "OffsetAlignmentWorker",
-                "Could not find the electrical offset property on this firmware.\n\n"
-                "Looked for encoder.config.offset and motor.config.phase_offset."))
+                "Could not find the electrical offset property on this firmware.\n\nTried: {0}"
+            ).format(tried)
+            if found:
+                message += "\n\n" + QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "This board does have: {0}\n\nPlease report these so the routine can support "
+                    "your firmware.").format(", ".join(found))
+            self.result.emit(False, message)
             self.finished.emit()
             return
 
