@@ -231,7 +231,11 @@ class ODriveGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.translator = QTranslator()
-        self.setFixedSize(850, 600)
+        # Resizable, with the original fixed size as the floor. The window opens exactly
+        # as it always did, but the added tabs can now be given room instead of being
+        # squeezed against a hard ceiling.
+        self.resize(850, 600)
+        self.setMinimumSize(850, 600)
         self.setFont(QFont("Roboto", 10))
         self.AXIS_STATE_MAP = {}
         self.language_map = {'en_US': "English", 'pt_BR': "Português"}

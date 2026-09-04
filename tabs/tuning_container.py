@@ -4,7 +4,7 @@ This module groups the optional tuning and safety tools under a single top level
 so that adding them does not crowd the main tab bar. It owns the sub-tabs and forwards
 the signals and lifecycle calls they need.
 """
-from PySide6.QtWidgets import QVBoxLayout, QTabWidget
+from PySide6.QtWidgets import QVBoxLayout, QTabWidget, QScrollArea, QFrame
 from PySide6.QtCore import QEvent
 
 from .base_tab import BaseTab
@@ -27,8 +27,15 @@ class TuningContainer(BaseTab):
         self.alignment_tab = AlignmentTab(main_window)
         self.safety_tab = SafetyTab(main_window)
         self.preset_tab = PresetTab(main_window)
+        # Each sub-tab scrolls rather than compressing. These pages are taller than the
+        # window's minimum height, and without this the groups inside get crushed into
+        # unreadable slivers instead of simply scrolling.
         for widget in (self.kt_tab, self.alignment_tab, self.safety_tab, self.preset_tab):
-            self.inner_tabs.addTab(widget, "")
+            area = QScrollArea()
+            area.setWidgetResizable(True)
+            area.setFrameShape(QFrame.Shape.NoFrame)
+            area.setWidget(widget)
+            self.inner_tabs.addTab(area, "")
         layout.addWidget(self.inner_tabs)
         self.retranslate_ui()
 

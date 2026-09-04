@@ -1064,6 +1064,34 @@ Flashing the wrong voltage variant configures the wrong voltage limits. Is your 
 
 Gravar a variante de tensão errada configura limites de tensão errados. A sua placa é mesmo v{1} {2}V?</translation>
     </message>
+    <message>
+        <source>Downloads the official firmware built for this exact board.
+Do this while connected normally: in DFU the board no longer reports its hardware version.
+The OpenFFBoard guide recommends fw-v0.5.6.</source>
+        <translation>Baixa o firmware oficial compilado exatamente para esta placa.
+Faça isto conectado normalmente: em DFU a placa deixa de reportar a versão de hardware.
+O guia do OpenFFBoard recomenda o fw-v0.5.6.</translation>
+    </message>
+    <message>
+        <source>Set board manually:</source>
+        <translation>Definir placa manualmente:</translation>
+    </message>
+    <message>
+        <source>Connect, or tick the box above.</source>
+        <translation>Conecte, ou marque a caixa acima.</translation>
+    </message>
+    <message>
+        <source>Voltage variant unknown.</source>
+        <translation>Variante de tensão desconhecida.</translation>
+    </message>
+    <message>
+        <source>Detected: {0}</source>
+        <translation>Detectado: {0}</translation>
+    </message>
+    <message>
+        <source>Stated: {0}</source>
+        <translation>Informado: {0}</translation>
+    </message>
 </context>
 <context>
     <name>FlashWorker</name>

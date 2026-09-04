@@ -11,7 +11,8 @@ import shutil
 import tempfile
 from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, 
-    QMessageBox, QTextEdit, QFileDialog, QWidget, QComboBox, QProgressBar, QCheckBox
+    QMessageBox, QTextEdit, QFileDialog, QWidget, QComboBox, QProgressBar, QCheckBox,
+    QScrollArea, QFrame
 )
 from PySide6.QtCore import Qt, QThread, QUrl, QCoreApplication, QEvent, Signal, QObject
 from PySide6.QtGui import QFont, QDesktopServices, QTextCursor
@@ -194,36 +195,49 @@ class FirmwareTab(BaseTab):
             self.check_dfu_btn.setEnabled(False)
         prereq_layout.addWidget(self.stm32_prog_status_label)
         left_panel_layout.addWidget(self.prereq_group)
+        # Kept deliberately compact: the window is a fixed 850x600 and this tab already
+        # carries four groups, so the explanation lives in the group's tooltip rather
+        # than in a wrapped paragraph that would squeeze everything else.
         self.download_group = QGroupBox()
         download_layout = QVBoxLayout(self.download_group)
-        self.download_help = QLabel(); self.download_help.setWordWrap(True)
-        self.download_help.setStyleSheet(f"color: {AppColors.INFO};")
-        download_layout.addWidget(self.download_help)
+        download_layout.setSpacing(3)
+        download_layout.setContentsMargins(8, 4, 8, 4)
+
         version_row = QHBoxLayout()
         self.label_fw_version_pick = QLabel()
         self.fw_version_combo = QComboBox()
         for tag in AVAILABLE_VERSIONS: self.fw_version_combo.addItem(tag)
         self.fw_version_combo.setCurrentText(RECOMMENDED_VERSION)
-        version_row.addWidget(self.label_fw_version_pick); version_row.addWidget(self.fw_version_combo)
         self.download_btn = QPushButton(); self.download_btn.clicked.connect(self.start_firmware_download)
         self.download_btn.setEnabled(False)
+        version_row.addWidget(self.label_fw_version_pick)
+        version_row.addWidget(self.fw_version_combo, 1)
         version_row.addWidget(self.download_btn)
         download_layout.addLayout(version_row)
-        self.detected_board_label = QLabel(); self.detected_board_label.setWordWrap(True)
-        download_layout.addWidget(self.detected_board_label)
+
         manual_row = QHBoxLayout()
         self.manual_board_check = QCheckBox()
         self.manual_board_check.toggled.connect(self._on_manual_board_toggled)
         self.manual_hw_combo = QComboBox()
         for hw in ("3.6", "3.5"): self.manual_hw_combo.addItem(hw)
         self.manual_volt_combo = QComboBox()
-        for v in ("56", "48", "24"): self.manual_volt_combo.addItem(v)
+        for v in ("56V", "48V", "24V"): self.manual_volt_combo.addItem(v)
         self.manual_hw_combo.setEnabled(False); self.manual_volt_combo.setEnabled(False)
         manual_row.addWidget(self.manual_board_check)
-        manual_row.addWidget(self.manual_hw_combo); manual_row.addWidget(self.manual_volt_combo)
+        manual_row.addWidget(self.manual_hw_combo)
+        manual_row.addWidget(self.manual_volt_combo)
         manual_row.addStretch()
         download_layout.addLayout(manual_row)
+
+        # One line only. A wrapped label here grows the group unpredictably.
+        self.detected_board_label = QLabel()
+        self.detected_board_label.setWordWrap(False)
+        download_layout.addWidget(self.detected_board_label)
+
+        # Only takes up space while a download is actually running.
         self.download_progress = QProgressBar(); self.download_progress.setRange(0, 100)
+        self.download_progress.setMaximumHeight(12)
+        self.download_progress.setVisible(False)
         download_layout.addWidget(self.download_progress)
         left_panel_layout.addWidget(self.download_group)
         self.controls_group = QGroupBox()
@@ -244,7 +258,13 @@ class FirmwareTab(BaseTab):
         self.flash_status_display.setReadOnly(True)
         self.flash_status_display.setFont(QFont("Consolas", 9))
         log_layout.addWidget(self.flash_status_display)
-        main_layout.addWidget(left_panel_widget, 2)
+        # The left column carries five groups now, more than the window's minimum height
+        # fits, so it scrolls instead of crushing them.
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setWidget(left_panel_widget)
+        main_layout.addWidget(left_scroll, 2)
         main_layout.addWidget(self.log_group, 3)
         self.on_connection_status_changed(False)
         self.select_fw_btn.setEnabled(False)
@@ -255,16 +275,14 @@ class FirmwareTab(BaseTab):
         self.label_hw.setText(self.tr("Hardware Version:"))
         self.label_serial.setText(self.tr("Serial Number:"))
         self.download_group.setTitle(self.tr("Automatic Firmware Download"))
-        self.download_help.setText(self.tr(
-            "Downloads the official firmware built for this exact board from the ODrive "
-            "releases. Do this while still connected normally: in DFU mode the board no longer "
-            "reports its hardware version, so the right file cannot be identified.\n\n"
-            "The OpenFFBoard ODrive guide recommends fw-v0.5.6, the last release for this "
-            "hardware generation."))
+        self.download_group.setToolTip(self.tr(
+            "Downloads the official firmware built for this exact board.\n"
+            "Do this while connected normally: in DFU the board no longer reports its hardware "
+            "version.\nThe OpenFFBoard guide recommends fw-v0.5.6."))
         self.label_fw_version_pick.setText(self.tr("Version:"))
         self.download_btn.setText(self.tr("Download"))
         self.download_btn.setToolTip(self.tr("Fetches the release file matching this board's hardware version."))
-        self.manual_board_check.setText(self.tr("Board cannot be connected \u2014 state it manually:"))
+        self.manual_board_check.setText(self.tr("Set board manually:"))
         self.manual_board_check.setToolTip(self.tr("Use this when the board runs firmware this application cannot talk to.\nFlashing itself works over DFU and does not need a connection."))
         self._update_detected_board()
         self.dfu_actions_group.setTitle(self.tr("Update Steps"))
@@ -433,7 +451,7 @@ class FirmwareTab(BaseTab):
     def _manual_asset_name(self):
         """Asset name from what the user states the board is."""
         major, minor = self.manual_hw_combo.currentText().split(".")
-        return expected_asset_name(int(major), int(minor), int(self.manual_volt_combo.currentText()))
+        return expected_asset_name(int(major), int(minor), int(self.manual_volt_combo.currentText().rstrip('V')))
 
     def _target_asset_name(self):
         """
@@ -454,26 +472,21 @@ class FirmwareTab(BaseTab):
 
     def _update_detected_board(self):
         """
-        Shows which firmware file will be fetched. Detection needs a working protocol
-        connection, which is also why downloading belongs before DFU; when the board
-        cannot be talked to at all, the manual override is the way through.
+        Names the file that will be fetched, in one line. Detection needs a working
+        protocol connection, which is why downloading belongs before DFU; a board that
+        cannot be talked to at all is handled by the manual override instead.
         """
-        asset, detected = self._target_asset_name()
+        asset, _ = self._target_asset_name()
 
         if self.manual_board_check.isChecked():
-            self.detected_board_label.setText(self.tr(
-                "Manually set to ODrive v{0} {1}V, will fetch <b>{2}</b>.<br>"
-                "Check this matches the label on your board: the wrong voltage variant sets the "
-                "wrong voltage limits.").format(self.manual_hw_combo.currentText(),
-                                               self.manual_volt_combo.currentText(), asset))
+            # Amber, because this is a claim by the user rather than a reading.
+            self.detected_board_label.setText(self.tr("Stated: {0}").format(asset))
             self.detected_board_label.setStyleSheet(f"color: {AppColors.WARNING};")
-            self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
             self.download_btn.setEnabled(self.download_thread is None)
             return
 
         if not self.main_window.is_connected or not self.main_window.odrv_proxy:
-            self.detected_board_label.setText(self.tr(
-                "Connect to detect the board, or tick the box to state it yourself."))
+            self.detected_board_label.setText(self.tr("Connect, or tick the box above."))
             self.detected_board_label.setStyleSheet("font-style: italic;")
             self.download_btn.setEnabled(False)
             return
@@ -481,24 +494,14 @@ class FirmwareTab(BaseTab):
         if not asset:
             # Never guess the voltage variant: the wrong one sets the wrong voltage
             # limits on the board.
-            self.detected_board_label.setText(self.tr(
-                "This board did not report its voltage variant. Tick the box to state it, "
-                "or select the file manually."))
+            self.detected_board_label.setText(self.tr("Voltage variant unknown."))
             self.detected_board_label.setStyleSheet(f"color: {AppColors.WARNING};")
             self.download_btn.setEnabled(False)
             return
 
-        try:
-            odrv = self.main_window.odrv_proxy.odrv
-            self.detected_board_label.setText(self.tr("Detected ODrive v{0}.{1} {2}V, needs <b>{3}</b>").format(
-                odrv.hw_version_major, odrv.hw_version_minor, odrv.hw_version_variant, asset))
-            self.detected_board_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
-            self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
-            self.download_btn.setEnabled(self.download_thread is None)
-        except Exception:
-            self.detected_board_label.setText(self.tr("Could not read the hardware version."))
-            self.detected_board_label.setStyleSheet(f"color: {AppColors.ERROR};")
-            self.download_btn.setEnabled(False)
+        self.detected_board_label.setText(self.tr("Detected: {0}").format(asset))
+        self.detected_board_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.download_btn.setEnabled(self.download_thread is None)
 
     def start_firmware_download(self):
         """Fetches the release asset matching this board, before DFU is entered."""
@@ -522,6 +525,7 @@ class FirmwareTab(BaseTab):
 
         self.download_btn.setEnabled(False)
         self.download_progress.setValue(0)
+        self.download_progress.setVisible(True)
         self.download_thread = QThread()
         self.download_worker = FirmwareDownloadWorker(self.fw_version_combo.currentText(), asset)
         self.download_worker.moveToThread(self.download_thread)
@@ -553,6 +557,7 @@ class FirmwareTab(BaseTab):
 
     def _on_download_thread_finished(self):
         self.download_thread, self.download_worker = None, None
+        self.download_progress.setVisible(False)
         self._update_detected_board()
 
     def show_missing_prereq_error(self):
