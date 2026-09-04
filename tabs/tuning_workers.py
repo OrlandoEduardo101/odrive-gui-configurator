@@ -45,6 +45,7 @@ class OffsetAlignmentWorker(QObject):
         self._is_running = True
         self._saved = {}
         self._arm_failure = None
+        self._velocities = []      # achieved speed per measured point
 
     def stop(self):
         """Signals the sweep to unwind at the next checkpoint."""
@@ -170,13 +171,14 @@ class OffsetAlignmentWorker(QObject):
 
         # Sample over a whole number of mechanical revolutions so cogging averages out.
         sample_seconds = self.revolutions / max(abs(velocity), 1e-3)
-        samples = []
+        samples, speeds = [], []
         sample_deadline = time.time() + sample_seconds
         while time.time() < sample_deadline:
             if not self._is_running:
                 return None
             try:
                 samples.append(self._read_current())
+                speeds.append(abs(axis.encoder.vel_estimate))
             except AttributeError:
                 pass
             if axis.error != 0:
@@ -188,7 +190,31 @@ class OffsetAlignmentWorker(QObject):
 
         if not samples:
             return float('inf')
+        # The speed actually reached decides whether the current reading means anything:
+        # a motor that never got moving draws a current unrelated to its alignment.
+        if speeds:
+            self._velocities.append(sum(speeds) / len(speeds))
         return sum(samples) / len(samples)
+
+    def _measurement_summary(self, finite):
+        """
+        One line of evidence about what the sweep actually saw, attached to failures so
+        the next attempt is informed rather than another guess.
+        """
+        parts = []
+        if finite:
+            values = list(finite.values())
+            parts.append(QCoreApplication.translate(
+                "OffsetAlignmentWorker", "current {0:.2f}-{1:.2f} A of {2:.1f} A allowed")
+                .format(min(values), max(values), self.current_limit))
+        if self._velocities:
+            parts.append(QCoreApplication.translate(
+                "OffsetAlignmentWorker", "speed reached {0:.2f}-{1:.2f} turns/s of {2:.2f} asked")
+                .format(min(self._velocities), max(self._velocities), self.velocity))
+        if not parts:
+            return ""
+        return "\n\n" + QCoreApplication.translate(
+            "OffsetAlignmentWorker", "What the sweep saw: {0}.").format("; ".join(parts))
 
     def _sweep(self, offsets, velocity, offset_config, offset_attr, label, base_pct, span_pct):
         """Measures every offset in the list, reporting progress as it goes."""
@@ -196,6 +222,17 @@ class OffsetAlignmentWorker(QObject):
         for i, offset in enumerate(offsets):
             if not self._is_running:
                 return None
+            # Check the very first point: if the motor barely turns, every later reading
+            # is noise too, and there is no reason to spend minutes collecting it.
+            if self._velocities and len(self._velocities) == 1:
+                reached = self._velocities[0]
+                if reached < 0.3 * abs(velocity):
+                    raise RuntimeError(QCoreApplication.translate(
+                        "OffsetAlignmentWorker",
+                        "The motor only reached {0:.2f} turns/s of the {1:.2f} asked for.\n\n"
+                        "At that speed the current says nothing about alignment. Raise the sweep "
+                        "current limit, or lower the test velocity, and try again.")
+                        .format(reached, abs(velocity)))
             pct = base_pct + int(span_pct * i / max(len(offsets), 1))
             self.progress.emit(
                 QCoreApplication.translate("OffsetAlignmentWorker", "{0}: offset {1} ({2}/{3})")
@@ -348,8 +385,8 @@ class OffsetAlignmentWorker(QObject):
                     "The sweep landed {0:.1f} electrical degrees from the calibrated offset. That "
                     "is a different commutation point, not a refinement, so it was not applied.\n\n"
                     "This usually means the measurements were noise: the motor may not have been "
-                    "turning freely, or the sweep current limit was too low to move it.")
-                    .format(electrical_degrees))
+                    "turning freely, or the sweep current limit was too low to move it.{1}")
+                    .format(electrical_degrees, self._measurement_summary(finite)))
 
             # Torque scales with cos(error), so this stays within 0-100% by construction
             # once the shift is inside a quarter turn.
@@ -361,6 +398,10 @@ class OffsetAlignmentWorker(QObject):
                 QCoreApplication.translate("OffsetAlignmentWorker", "Best alignment found: {0}").format(best_offset),
                 QCoreApplication.translate("OffsetAlignmentWorker",
                     "Measured {0} of {1} offsets successfully.").format(len(finite), len(all_readings)),
+                QCoreApplication.translate("OffsetAlignmentWorker",
+                    "Speed held: {0:.2f} turns/s of {1:.2f} asked.").format(
+                        sum(self._velocities) / len(self._velocities) if self._velocities else 0.0,
+                        self.velocity),
             ]
             if best_current is not None and worst_current is not None:
                 lines.append(QCoreApplication.translate(

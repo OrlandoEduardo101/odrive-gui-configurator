@@ -2536,6 +2536,42 @@ This usually means the measurements were noise: the motor may not have been turn
 
 Normalmente isso significa que as medições foram ruído: o motor pode não estar girando livremente, ou a corrente da varredura estava baixa demais para movê-lo.</translation>
     </message>
+    <message>
+        <source>The motor only reached {0:.2f} turns/s of the {1:.2f} asked for.
+
+At that speed the current says nothing about alignment. Raise the sweep current limit, or lower the test velocity, and try again.</source>
+        <translation>O motor só atingiu {0:.2f} voltas/s das {1:.2f} pedidas.
+
+Nessa velocidade a corrente não diz nada sobre o alinhamento. Aumente o limite de corrente da varredura, ou reduza a velocidade de teste, e tente de novo.</translation>
+    </message>
+    <message>
+        <source>current {0:.2f}-{1:.2f} A of {2:.1f} A allowed</source>
+        <translation>corrente {0:.2f}-{1:.2f} A de {2:.1f} A permitidos</translation>
+    </message>
+    <message>
+        <source>speed reached {0:.2f}-{1:.2f} turns/s of {2:.2f} asked</source>
+        <translation>velocidade atingida {0:.2f}-{1:.2f} voltas/s de {2:.2f} pedidas</translation>
+    </message>
+    <message>
+        <source>What the sweep saw: {0}.</source>
+        <translation>O que a varredura viu: {0}.</translation>
+    </message>
+    <message>
+        <source>Speed held: {0:.2f} turns/s of {1:.2f} asked.</source>
+        <translation>Velocidade mantida: {0:.2f} voltas/s de {1:.2f} pedidas.</translation>
+    </message>
+    <message>
+        <source>This usually means the measurements were noise: the motor may not have been turning freely, or the sweep current limit was too low to move it.{1}</source>
+        <translation>Normalmente isso significa que as medições foram ruído: o motor pode não estar girando livremente, ou a corrente da varredura estava baixa demais para movê-lo.{1}</translation>
+    </message>
+    <message>
+        <source>The sweep landed {0:.1f} electrical degrees from the calibrated offset. That is a different commutation point, not a refinement, so it was not applied.
+
+This usually means the measurements were noise: the motor may not have been turning freely, or the sweep current limit was too low to move it.{1}</source>
+        <translation>A varredura parou a {0:.1f} graus elétricos do offset calibrado. Isso é um ponto de comutação diferente, não um refino, então não foi aplicado.
+
+Normalmente isso significa que as medições foram ruído: o motor pode não estar girando livremente, ou a corrente da varredura estava baixa demais para movê-lo.{1}</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>
