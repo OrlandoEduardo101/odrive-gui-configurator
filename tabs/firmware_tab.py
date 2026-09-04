@@ -11,7 +11,7 @@ import shutil
 import tempfile
 from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, 
-    QMessageBox, QTextEdit, QFileDialog, QWidget, QComboBox, QProgressBar
+    QMessageBox, QTextEdit, QFileDialog, QWidget, QComboBox, QProgressBar, QCheckBox
 )
 from PySide6.QtCore import Qt, QThread, QUrl, QCoreApplication, QEvent, Signal, QObject
 from PySide6.QtGui import QFont, QDesktopServices, QTextCursor
@@ -211,6 +211,18 @@ class FirmwareTab(BaseTab):
         download_layout.addLayout(version_row)
         self.detected_board_label = QLabel(); self.detected_board_label.setWordWrap(True)
         download_layout.addWidget(self.detected_board_label)
+        manual_row = QHBoxLayout()
+        self.manual_board_check = QCheckBox()
+        self.manual_board_check.toggled.connect(self._on_manual_board_toggled)
+        self.manual_hw_combo = QComboBox()
+        for hw in ("3.6", "3.5"): self.manual_hw_combo.addItem(hw)
+        self.manual_volt_combo = QComboBox()
+        for v in ("56", "48", "24"): self.manual_volt_combo.addItem(v)
+        self.manual_hw_combo.setEnabled(False); self.manual_volt_combo.setEnabled(False)
+        manual_row.addWidget(self.manual_board_check)
+        manual_row.addWidget(self.manual_hw_combo); manual_row.addWidget(self.manual_volt_combo)
+        manual_row.addStretch()
+        download_layout.addLayout(manual_row)
         self.download_progress = QProgressBar(); self.download_progress.setRange(0, 100)
         download_layout.addWidget(self.download_progress)
         left_panel_layout.addWidget(self.download_group)
@@ -252,6 +264,8 @@ class FirmwareTab(BaseTab):
         self.label_fw_version_pick.setText(self.tr("Version:"))
         self.download_btn.setText(self.tr("Download"))
         self.download_btn.setToolTip(self.tr("Fetches the release file matching this board's hardware version."))
+        self.manual_board_check.setText(self.tr("Board cannot be connected \u2014 state it manually:"))
+        self.manual_board_check.setToolTip(self.tr("Use this when the board runs firmware this application cannot talk to.\nFlashing itself works over DFU and does not need a connection."))
         self._update_detected_board()
         self.dfu_actions_group.setTitle(self.tr("Update Steps"))
         self.enter_dfu_btn.setText(self.tr("1. DFU Mode"))
@@ -411,60 +425,100 @@ class FirmwareTab(BaseTab):
 
     # --------------------------------------------- automatic firmware download ---
 
+    def _on_manual_board_toggled(self, checked):
+        self.manual_hw_combo.setEnabled(checked)
+        self.manual_volt_combo.setEnabled(checked)
+        self._update_detected_board()
+
+    def _manual_asset_name(self):
+        """Asset name from what the user states the board is."""
+        major, minor = self.manual_hw_combo.currentText().split(".")
+        return expected_asset_name(int(major), int(minor), int(self.manual_volt_combo.currentText()))
+
+    def _target_asset_name(self):
+        """
+        The asset to fetch. Detection is preferred, but a board on firmware this
+        application cannot talk to still needs a way to be reflashed, so the user can
+        state the board instead. Returns (asset_name, was_detected).
+        """
+        if self.manual_board_check.isChecked():
+            return self._manual_asset_name(), False
+        if not self.main_window.is_connected or not self.main_window.odrv_proxy:
+            return None, False
+        try:
+            odrv = self.main_window.odrv_proxy.odrv
+            return expected_asset_name(odrv.hw_version_major, odrv.hw_version_minor,
+                                       getattr(odrv, 'hw_version_variant', None)), True
+        except Exception:
+            return None, True
+
     def _update_detected_board(self):
         """
-        Shows which firmware file this board needs. The hardware version is only
-        readable over the normal protocol, so this has to happen before DFU, which is
-        also why downloading is offered as the step before entering DFU.
+        Shows which firmware file will be fetched. Detection needs a working protocol
+        connection, which is also why downloading belongs before DFU; when the board
+        cannot be talked to at all, the manual override is the way through.
         """
+        asset, detected = self._target_asset_name()
+
+        if self.manual_board_check.isChecked():
+            self.detected_board_label.setText(self.tr(
+                "Manually set to ODrive v{0} {1}V, will fetch <b>{2}</b>.<br>"
+                "Check this matches the label on your board: the wrong voltage variant sets the "
+                "wrong voltage limits.").format(self.manual_hw_combo.currentText(),
+                                               self.manual_volt_combo.currentText(), asset))
+            self.detected_board_label.setStyleSheet(f"color: {AppColors.WARNING};")
+            self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
+            self.download_btn.setEnabled(self.download_thread is None)
+            return
+
         if not self.main_window.is_connected or not self.main_window.odrv_proxy:
-            self.detected_board_label.setText(self.tr("Connect to the ODrive to detect which firmware it needs."))
+            self.detected_board_label.setText(self.tr(
+                "Connect to detect the board, or tick the box to state it yourself."))
             self.detected_board_label.setStyleSheet("font-style: italic;")
             self.download_btn.setEnabled(False)
             return
-        try:
-            odrv = self.main_window.odrv_proxy.odrv
-            major, minor = odrv.hw_version_major, odrv.hw_version_minor
-            variant = getattr(odrv, 'hw_version_variant', None)
-        except Exception:
-            self.detected_board_label.setText(self.tr("Could not read the hardware version."))
-            self.detected_board_label.setStyleSheet(f"color: {AppColors.ERROR};")
-            self.download_btn.setEnabled(False)
-            return
 
-        asset = expected_asset_name(major, minor, variant)
         if not asset:
             # Never guess the voltage variant: the wrong one sets the wrong voltage
             # limits on the board.
             self.detected_board_label.setText(self.tr(
-                "This board did not report its voltage variant, so the right firmware cannot be "
-                "identified. Select the file manually."))
+                "This board did not report its voltage variant. Tick the box to state it, "
+                "or select the file manually."))
             self.detected_board_label.setStyleSheet(f"color: {AppColors.WARNING};")
             self.download_btn.setEnabled(False)
             return
 
-        self.detected_board_label.setText(self.tr("Detected ODrive v{0}.{1} {2}V, needs <b>{3}</b>").format(
-            major, minor, variant, asset))
-        self.detected_board_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
-        self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
-        self.download_btn.setEnabled(self.download_thread is None)
+        try:
+            odrv = self.main_window.odrv_proxy.odrv
+            self.detected_board_label.setText(self.tr("Detected ODrive v{0}.{1} {2}V, needs <b>{3}</b>").format(
+                odrv.hw_version_major, odrv.hw_version_minor, odrv.hw_version_variant, asset))
+            self.detected_board_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
+            self.detected_board_label.setTextFormat(Qt.TextFormat.RichText)
+            self.download_btn.setEnabled(self.download_thread is None)
+        except Exception:
+            self.detected_board_label.setText(self.tr("Could not read the hardware version."))
+            self.detected_board_label.setStyleSheet(f"color: {AppColors.ERROR};")
+            self.download_btn.setEnabled(False)
 
     def start_firmware_download(self):
         """Fetches the release asset matching this board, before DFU is entered."""
         if self.download_thread is not None:
             return
-        odrv = self.get_odrv()
-        if not odrv:
-            return
-        try:
-            asset = expected_asset_name(odrv.hw_version_major, odrv.hw_version_minor,
-                                        getattr(odrv, 'hw_version_variant', None))
-        except Exception:
-            asset = None
+        asset, detected = self._target_asset_name()
         if not asset:
             QMessageBox.warning(self, self.tr("Unknown Board"), self.tr(
-                "The hardware version could not be read, so the matching firmware cannot be chosen."))
+                "The board could not be identified, so the matching firmware cannot be chosen."))
             return
+        if not detected:
+            confirm = QMessageBox.warning(self, self.tr("Confirm Board"), self.tr(
+                "About to fetch {0} based on what you stated, not on what the board reported.\n\n"
+                "Flashing the wrong voltage variant configures the wrong voltage limits. Is your "
+                "board really v{1} {2}V?").format(asset, self.manual_hw_combo.currentText(),
+                                                  self.manual_volt_combo.currentText()),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No)
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
 
         self.download_btn.setEnabled(False)
         self.download_progress.setValue(0)

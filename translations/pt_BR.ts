@@ -1026,6 +1026,44 @@ Now put the ODrive in DFU mode, check for it, and install.</source>
 
 Agora coloque a ODrive em modo DFU, verifique, e instale.</translation>
     </message>
+    <message>
+        <source>Board cannot be connected — state it manually:</source>
+        <translation>Placa não conecta — informar manualmente:</translation>
+    </message>
+    <message>
+        <source>Use this when the board runs firmware this application cannot talk to.
+Flashing itself works over DFU and does not need a connection.</source>
+        <translation>Use isto quando a placa estiver com um firmware que este aplicativo não consegue conversar.
+A gravação em si funciona por DFU e não precisa de conexão.</translation>
+    </message>
+    <message>
+        <source>Manually set to ODrive v{0} {1}V, will fetch &lt;b&gt;{2}&lt;/b&gt;.&lt;br&gt;Check this matches the label on your board: the wrong voltage variant sets the wrong voltage limits.</source>
+        <translation>Definido manualmente como ODrive v{0} {1}V, vai baixar &lt;b&gt;{2}&lt;/b&gt;.&lt;br&gt;Confira se bate com a etiqueta da sua placa: a variante de tensão errada configura limites de tensão errados.</translation>
+    </message>
+    <message>
+        <source>Connect to detect the board, or tick the box to state it yourself.</source>
+        <translation>Conecte para detectar a placa, ou marque a caixa para informá-la você mesmo.</translation>
+    </message>
+    <message>
+        <source>This board did not report its voltage variant. Tick the box to state it, or select the file manually.</source>
+        <translation>Esta placa não reportou a variante de tensão. Marque a caixa para informá-la, ou selecione o arquivo manualmente.</translation>
+    </message>
+    <message>
+        <source>The board could not be identified, so the matching firmware cannot be chosen.</source>
+        <translation>A placa não pôde ser identificada, então o firmware correspondente não pode ser escolhido.</translation>
+    </message>
+    <message>
+        <source>Confirm Board</source>
+        <translation>Confirmar Placa</translation>
+    </message>
+    <message>
+        <source>About to fetch {0} based on what you stated, not on what the board reported.
+
+Flashing the wrong voltage variant configures the wrong voltage limits. Is your board really v{1} {2}V?</source>
+        <translation>Prestes a baixar {0} com base no que você informou, não no que a placa reportou.
+
+Gravar a variante de tensão errada configura limites de tensão errados. A sua placa é mesmo v{1} {2}V?</translation>
+    </message>
 </context>
 <context>
     <name>FlashWorker</name>
