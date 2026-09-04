@@ -296,8 +296,14 @@ class OffsetAlignmentWorker(QObject):
             axis.motor.config.current_lim = float(self.current_limit)
             axis.controller.config.vel_limit = max(self.velocity * 2.0, 5.0)
 
+            # Centre the window on the calibrated offset instead of starting there. The
+            # window spans one electrical revolution, so its two ends are the same
+            # electrical angle; with the expected optimum sitting at that seam, the two
+            # directions can settle on ends that are electrically adjacent but numerically
+            # a whole revolution apart.
             step = counts_per_electrical_rev / self.coarse_points
-            coarse_offsets = [round(original_offset + i * step) % cpr
+            first = original_offset - counts_per_electrical_rev / 2.0
+            coarse_offsets = [round(first + i * step) % cpr
                               for i in range(self.coarse_points)]
 
             best_per_direction = []
@@ -337,7 +343,18 @@ class OffsetAlignmentWorker(QObject):
 
             # Averaging the two directions cancels the encoder's velocity dependent
             # phase lag, which otherwise biases the optimum one way per direction.
-            best_offset = int(round(sum(best_per_direction) / len(best_per_direction))) % cpr
+            #
+            # The average has to be circular. Offsets a whole electrical revolution apart
+            # are the same electrical angle, so if the two directions settle on equivalent
+            # offsets a revolution apart, a plain arithmetic mean lands halfway between
+            # them, which is half an electrical turn from either, and meaningless.
+            angles = [2.0 * math.pi * ((best - original_offset) % counts_per_electrical_rev)
+                      / counts_per_electrical_rev for best in best_per_direction]
+            mean_angle = math.atan2(
+                sum(math.sin(a) for a in angles) / len(angles),
+                sum(math.cos(a) for a in angles) / len(angles))
+            best_offset = int(round(
+                original_offset + counts_per_electrical_rev * mean_angle / (2.0 * math.pi))) % cpr
 
             all_readings = {}
             for readings in readings_by_direction.values():
