@@ -2529,6 +2529,10 @@ Isto roda a calibração várias vezes, mostra o quanto os resultados se espalha
         <source>Measured on a 15 pole pair hoverboard motor, the firmware default repeated more tightly than longer scans, and runs far quicker.</source>
         <translation>Medido num motor de hoverboard de 15 pares de polos, o padrão do firmware se repetiu de forma mais apertada que varreduras longas, e roda bem mais rápido.</translation>
     </message>
+    <message>
+        <source>That takes about {0:.0f} s, which is past the 25 s limit on the Encoder tab&apos;s own calibration button. Reduce it or that button will time out.</source>
+        <translation>Isso leva cerca de {0:.0f} s, além do limite de 25 s do botão de calibração da própria aba Encoder. Reduza, ou aquele botão vai dar timeout.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -3415,6 +3419,10 @@ As configurações originais foram restauradas.</translation>
     <message>
         <source>Applied the average of all {0}: offset {1}. Averaging random scatter tightens it by about {2:.1f} times, so this is closer to the true alignment than any one run.</source>
         <translation>Aplicada a média das {0}: offset {1}. Tirar a média de uma dispersão aleatória aperta o resultado em cerca de {2:.1f} vezes, então isto está mais perto do alinhamento verdadeiro do que qualquer execução isolada.</translation>
+    </message>
+    <message>
+        <source>Scan distance and calibration current were put back as they were.</source>
+        <translation>A distância de varredura e a corrente de calibração foram devolvidas como estavam.</translation>
     </message>
 </context>
 </TS>

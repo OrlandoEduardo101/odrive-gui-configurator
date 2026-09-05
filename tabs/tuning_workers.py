@@ -252,7 +252,14 @@ class CalibrationQualityWorker(QObject):
                     "A spread this small already costs under 0.2% of torque, so there was little "
                     "to gain here. Your calibration was in good shape."))
 
+            # The product of this routine is the averaged offset, nothing else. Leaving a
+            # longer scan distance behind once made the Encoder tab's own calibration
+            # button time out, because that scan no longer fitted in its 25 second limit.
+            self._restore()
             setattr(axis.encoder.config, self._offset_attr, int(round(mean)))
+            lines.append("")
+            lines.append(QCoreApplication.translate("CalibrationQualityWorker",
+                "Scan distance and calibration current were put back as they were."))
             self.result.emit(True, "\n".join(lines),
                              {'phase_offset': int(round(mean)), 'spread_counts': round(spread)})
 

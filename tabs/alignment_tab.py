@@ -168,9 +168,15 @@ class AlignmentTab(BaseTab):
                 current_revs = distance / (2 * math.pi * pole_pairs)
                 text = self.tr("The board currently scans {0:.2f} mechanical revolutions ({1} pole pairs).").format(
                     current_revs, pole_pairs)
-                if current_revs < 0.95:
-                    text += " " + self.tr("Under one full turn, so cogging cannot average out.")
-                    self.current_scan_label.setStyleSheet(f"color: {AppColors.WARNING};")
+                # The Encoder tab's own calibration gives up after 25 s, and the scan
+                # runs out and back at calib_scan_omega, 4*pi electrical rad/s.
+                scan_seconds = distance / (2 * math.pi)
+                if scan_seconds > 20:
+                    text += " " + self.tr(
+                        "That takes about {0:.0f} s, which is past the 25 s limit on the Encoder "
+                        "tab's own calibration button. Reduce it or that button will time out."
+                    ).format(scan_seconds)
+                    self.current_scan_label.setStyleSheet(f"color: {AppColors.ERROR};")
                 else:
                     self.current_scan_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
                 self.current_scan_label.setText(text)
