@@ -2608,6 +2608,42 @@ Tente uma velocidade de teste menor, e aumente o limite de corrente da varredura
         <source>Speed held on those: {0:.2f} turns/s of {1:.2f} asked.</source>
         <translation>Velocidade mantida nesses: {0:.2f} voltas/s de {1:.2f} pedidas.</translation>
     </message>
+    <message>
+        <source>The motor produced no measurable acceleration at the calibrated offset, where commutation is known to be good.
+
+Check that the shaft turns freely, and that the sweep current limit is enough to move it.</source>
+        <translation>O motor não produziu aceleração mensurável no offset calibrado, onde a comutação é sabidamente boa.
+
+Verifique se o eixo gira livremente e se o limite de corrente da varredura é suficiente para movê-lo.</translation>
+    </message>
+    <message>
+        <source>{0} of {1} offsets produced acceleration.</source>
+        <translation>{0} de {1} offsets produziram aceleração.</translation>
+    </message>
+    <message>
+        <source>Difference: {0} counts = {1:.1f} electrical degrees.</source>
+        <translation>Diferença: {0} contas = {1:.1f} graus elétricos.</translation>
+    </message>
+    <message>
+        <source>Only {0} of {1} offsets produced any acceleration. Without a clear peak there is no reliable alignment.
+
+Check that the shaft is free and that the sweep current limit is high enough.{2}</source>
+        <translation>Só {0} de {1} offsets produziram alguma aceleração. Sem um pico claro não existe um alinhamento confiável.
+
+Verifique se o eixo está livre e se o limite de corrente da varredura é alto o bastante.{2}</translation>
+    </message>
+    <message>
+        <source>The sweep landed {0:.1f} electrical degrees from the calibrated offset. That is a different commutation point, not a refinement, so it was not applied.</source>
+        <translation>A varredura parou a {0:.1f} graus elétricos do offset calibrado. Isso é um ponto de comutação diferente, não um refino, então não foi aplicado.</translation>
+    </message>
+    <message>
+        <source>Torque recovered: about {0:.1f}%.</source>
+        <translation>Torque recuperado: cerca de {0:.1f}%.</translation>
+    </message>
+    <message>
+        <source>Peak speed during the sweep: {0:.1f} turns/s.</source>
+        <translation>Velocidade de pico durante a varredura: {0:.1f} voltas/s.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>

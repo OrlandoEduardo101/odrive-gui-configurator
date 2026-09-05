@@ -21,6 +21,7 @@ from PySide6.QtCore import QObject, Signal, QCoreApplication
 import fibre
 from odrive.enums import AXIS_STATE_IDLE, AXIS_STATE_CLOSED_LOOP_CONTROL
 from odrive.enums import CONTROL_MODE_VELOCITY_CONTROL, INPUT_MODE_VEL_RAMP
+from odrive.enums import CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH
 
 
 class OffsetAlignmentWorker(QObject):
@@ -45,7 +46,8 @@ class OffsetAlignmentWorker(QObject):
         self._is_running = True
         self._saved = {}
         self._arm_failure = None
-        self._velocities = []      # achieved speed per measured point
+        self._peak_speeds = []     # fastest speed seen at each measured point
+        self._test_torque = 0.0
 
     def stop(self):
         """Signals the sweep to unwind at the next checkpoint."""
@@ -241,9 +243,134 @@ class OffsetAlignmentWorker(QObject):
         return "\n\n" + QCoreApplication.translate(
             "OffsetAlignmentWorker", "What the sweep saw: {0}.").format("; ".join(parts))
 
-    def _sweep(self, offsets, velocity, offset_config, offset_attr, label, base_pct, span_pct):
-        """Measures every offset in the list, reporting progress as it goes."""
-        readings = {}
+    # ------------------------------------------------- torque based metric ---
+    #
+    # The velocity controller is not usable for this measurement on every motor: with a
+    # large direct drive rotor its default gains cannot hold a setpoint, and the axis
+    # stalls or runs away depending on the offset, making the current drawn
+    # incomparable between points. Commanding torque instead removes that loop
+    # entirely. Acceleration is Kt*cos(error)*Iq/J, so dividing the measured
+    # acceleration by the measured current gives a quantity proportional to
+    # cos(error), which peaks exactly at the aligned offset and needs neither the
+    # inertia nor the torque constant to be known.
+
+    ACCEL_SAMPLE_S = 0.4        # long enough to fit a slope, short enough to stay slow
+    REST_SPEED = 0.3            # turns/s counted as stopped
+    BRAKE_TIMEOUT_S = 4.0
+
+    def _enter_torque_mode(self):
+        """Arms closed loop in torque control. Returns True once the axis holds it."""
+        axis = self.odrv.axis0
+        axis.error = 0
+        axis.motor.error = 0
+        axis.encoder.error = 0
+        axis.controller.error = 0
+        axis.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
+        axis.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+        axis.controller.input_torque = 0.0
+        axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not self._is_running:
+                return False
+            if axis.current_state == AXIS_STATE_CLOSED_LOOP_CONTROL:
+                return True
+            time.sleep(0.05)
+        try:
+            self._arm_failure = (
+                f"axis={hex(axis.error)} motor={hex(axis.motor.error)} "
+                f"encoder={hex(axis.encoder.error)} controller={hex(axis.controller.error)}")
+        except Exception:
+            pass
+        return False
+
+    def _brake_to_rest(self, torque):
+        """
+        Brings the rotor back to a stop by pushing against its motion, so each point
+        accelerates from the same place. Left spinning, the wheel would build up speed
+        across the sweep until back-EMF ate the bus voltage and torque collapsed.
+        """
+        axis = self.odrv.axis0
+        deadline = time.time() + self.BRAKE_TIMEOUT_S
+        while time.time() < deadline:
+            if not self._is_running:
+                return False
+            speed = axis.encoder.vel_estimate
+            if abs(speed) < self.REST_SPEED:
+                axis.controller.input_torque = 0.0
+                return True
+            axis.controller.input_torque = -math.copysign(torque, speed)
+            time.sleep(0.03)
+        axis.controller.input_torque = 0.0
+        return False
+
+    def _measure_response(self, offset, sign, offset_config, offset_attr):
+        """
+        Applies one candidate offset and returns (acceleration per amp, peak speed).
+        Returns None when cancelled. A hopeless offset scores zero rather than being
+        dropped: producing no torque is exactly what rules it out.
+        """
+        self._go_idle()
+        setattr(offset_config, offset_attr, int(offset))
+        if not self._enter_torque_mode():
+            self._go_idle()
+            return 0.0, 0.0
+
+        axis = self.odrv.axis0
+        torque = self._test_torque
+        if not self._brake_to_rest(torque):
+            axis.controller.input_torque = 0.0
+            self._go_idle()
+            return 0.0, 0.0
+
+        axis.controller.input_torque = sign * torque
+        start = time.time()
+        times, speeds, currents = [], [], []
+        while time.time() - start < self.ACCEL_SAMPLE_S:
+            if not self._is_running:
+                axis.controller.input_torque = 0.0
+                return None
+            if axis.error != 0:
+                break
+            times.append(time.time() - start)
+            speeds.append(axis.encoder.vel_estimate)
+            try:
+                currents.append(abs(self._read_current()))
+            except AttributeError:
+                pass
+            time.sleep(0.02)
+
+        axis.controller.input_torque = 0.0
+        self._brake_to_rest(torque)
+        self._go_idle()
+
+        if len(times) < 3 or not currents:
+            return 0.0, 0.0
+        fit = self._linear_fit(times, speeds)
+        if fit is None:
+            return 0.0, 0.0
+        acceleration = abs(fit[0])
+        mean_current = sum(currents) / len(currents)
+        if mean_current < 1e-3:
+            return 0.0, 0.0
+        # Normalising by the current actually drawn makes the score independent of how
+        # precisely the commanded torque landed.
+        return acceleration / mean_current, max(abs(v) for v in speeds)
+
+    @staticmethod
+    def _linear_fit(xs, ys):
+        n = len(xs)
+        mean_x, mean_y = sum(xs) / n, sum(ys) / n
+        sxx = sum((x - mean_x) ** 2 for x in xs)
+        if sxx == 0:
+            return None
+        slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
+        return slope, mean_y - slope * mean_x
+
+    def _sweep(self, offsets, sign, offset_config, offset_attr, label, base_pct, span_pct):
+        """Scores every offset in the list, reporting progress as it goes."""
+        scores = {}
         for i, offset in enumerate(offsets):
             if not self._is_running:
                 return None
@@ -251,13 +378,13 @@ class OffsetAlignmentWorker(QObject):
             self.progress.emit(
                 QCoreApplication.translate("OffsetAlignmentWorker", "{0}: offset {1} ({2}/{3})")
                 .format(label, int(offset), i + 1, len(offsets)), pct)
-            value = self._measure_at(offset, velocity, offset_config, offset_attr)
-            if value is None:
+            measured = self._measure_response(offset, sign, offset_config, offset_attr)
+            if measured is None:
                 return None
-            readings[int(offset)] = value
-        return readings
-
-    # ------------------------------------------------------------------- run ---
+            score, peak = measured
+            scores[int(offset)] = score
+            self._peak_speeds.append(peak)
+        return scores
 
     def run(self):
         """Executes the full alignment sweep and restores the drive afterwards."""
@@ -282,6 +409,7 @@ class OffsetAlignmentWorker(QObject):
         try:
             cpr = int(axis.encoder.config.cpr)
             pole_pairs = int(axis.motor.config.pole_pairs)
+            torque_constant = float(axis.motor.config.torque_constant)
         except Exception as e:
             self.result.emit(False, QCoreApplication.translate(
                 "OffsetAlignmentWorker", "Could not read encoder CPR or pole pairs: {0}").format(e))
@@ -297,100 +425,89 @@ class OffsetAlignmentWorker(QObject):
         counts_per_electrical_rev = cpr / pole_pairs
         original_offset = int(getattr(offset_config, offset_attr))
 
-        # Everything changed here is restored in the finally block.
-        try:
-            self._saved['current_lim'] = axis.motor.config.current_lim
-            self._saved['control_mode'] = axis.controller.config.control_mode
-            self._saved['input_mode'] = axis.controller.config.input_mode
-            self._saved['vel_limit'] = axis.controller.config.vel_limit
-        except Exception:
-            pass
+        for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
+                          ('control_mode', ('controller', 'config', 'control_mode')),
+                          ('input_mode', ('controller', 'config', 'input_mode')),
+                          ('vel_limit', ('controller', 'config', 'vel_limit'))):
+            try:
+                target = axis
+                for part in path[:-1]:
+                    target = getattr(target, part)
+                self._saved[key] = getattr(target, path[-1])
+            except Exception:
+                pass
 
         try:
             axis.motor.config.current_lim = float(self.current_limit)
-            axis.controller.config.vel_limit = max(self.velocity * 2.0, 5.0)
+            # Aim for most of the allowed current. torque_constant only converts the
+            # request into that current; its accuracy does not matter here, because the
+            # score is divided by the current actually measured.
+            if torque_constant <= 0:
+                torque_constant = 1.0
+            self._test_torque = 0.7 * self.current_limit * torque_constant
 
-            # Centre the window on the calibrated offset instead of starting there. The
-            # window spans one electrical revolution, so its two ends are the same
-            # electrical angle; with the expected optimum sitting at that seam, the two
-            # directions can settle on ends that are electrically adjacent but numerically
-            # a whole revolution apart.
-            step = counts_per_electrical_rev / self.coarse_points
-            first = original_offset - counts_per_electrical_rev / 2.0
-            coarse_offsets = [round(first + i * step) % cpr
-                              for i in range(self.coarse_points)]
-
-            # Reference point at the calibrated offset, where commutation is known to be
-            # good. If the motor cannot hold speed even here, the sweep settings are wrong
-            # and every later reading would be noise. Checking the first swept point
-            # instead would be useless: the window is centred, so that point is
-            # deliberately half an electrical revolution off, the worst case there is.
             self.progress.emit(QCoreApplication.translate(
                 "OffsetAlignmentWorker", "Checking the calibrated offset first..."), 0)
-            reference = self._measure_at(original_offset, self.velocity,
-                                         offset_config, offset_attr)
+            reference = self._measure_response(original_offset, 1.0, offset_config, offset_attr)
             if reference is None:
                 raise InterruptedError
-            reference_current, reference_speed = reference
-            if reference_speed < 0.3 * self.velocity:
+            reference_score, _ = reference
+            if reference_score <= 0.0:
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
-                    "At the calibrated offset the motor only reached {0:.2f} turns/s of the "
-                    "{1:.2f} asked for, drawing {2:.2f} A of the {3:.1f} A allowed.\n\n"
-                    "Commutation is fine there, so the sweep settings are the problem. Raise the "
-                    "sweep current limit, or lower the test velocity, and try again.").format(
-                        reference_speed, self.velocity,
-                        reference_current if math.isfinite(reference_current) else float('nan'),
-                        self.current_limit))
+                    "The motor produced no measurable acceleration at the calibrated offset, "
+                    "where commutation is known to be good.\n\nCheck that the shaft turns "
+                    "freely, and that the sweep current limit is enough to move it."))
+
+            step = counts_per_electrical_rev / self.coarse_points
+            first = original_offset - counts_per_electrical_rev / 2.0
+            coarse_offsets = [round(first + i * step) % cpr for i in range(self.coarse_points)]
 
             best_per_direction = []
-            readings_by_direction = {}
-
-            for d_index, direction in enumerate((1.0, -1.0)):
-                velocity = self.velocity * direction
+            scores_by_direction = {}
+            for d_index, sign in enumerate((1.0, -1.0)):
                 label = (QCoreApplication.translate("OffsetAlignmentWorker", "Coarse sweep (forward)")
-                         if direction > 0 else
+                         if sign > 0 else
                          QCoreApplication.translate("OffsetAlignmentWorker", "Coarse sweep (reverse)"))
                 base = d_index * 50
-                coarse = self._sweep(coarse_offsets, velocity, offset_config, offset_attr,
-                                     label, base, 30)
+                coarse = self._sweep(coarse_offsets, sign, offset_config, offset_attr, label, base, 30)
                 if coarse is None:
                     raise InterruptedError
+                best_coarse = max(coarse, key=coarse.get)
 
-                usable_coarse = self._speed_valid(coarse)
-                if not usable_coarse:
-                    raise RuntimeError(self._no_valid_speed_message(coarse))
-                best_coarse = min(usable_coarse, key=usable_coarse.get)
-
-                # Refine around the coarse winner, one coarse step to either side.
                 fine_span = step
                 fine_offsets = [
                     round(best_coarse - fine_span + (2 * fine_span) * j / max(self.fine_points - 1, 1)) % cpr
-                    for j in range(self.fine_points)
-                ]
+                    for j in range(self.fine_points)]
                 fine_label = (QCoreApplication.translate("OffsetAlignmentWorker", "Fine sweep (forward)")
-                              if direction > 0 else
+                              if sign > 0 else
                               QCoreApplication.translate("OffsetAlignmentWorker", "Fine sweep (reverse)"))
-                fine = self._sweep(fine_offsets, velocity, offset_config, offset_attr,
-                                   fine_label, base + 30, 20)
+                fine = self._sweep(fine_offsets, sign, offset_config, offset_attr, fine_label, base + 30, 20)
                 if fine is None:
                     raise InterruptedError
 
                 combined = dict(coarse)
                 combined.update(fine)
-                readings_by_direction[direction] = combined
-                usable = self._speed_valid(combined)
-                if not usable:
-                    raise RuntimeError(self._no_valid_speed_message(combined))
-                best_per_direction.append(min(usable, key=usable.get))
+                scores_by_direction[sign] = combined
+                best_per_direction.append(max(combined, key=combined.get))
 
-            # Averaging the two directions cancels the encoder's velocity dependent
-            # phase lag, which otherwise biases the optimum one way per direction.
-            #
-            # The average has to be circular. Offsets a whole electrical revolution apart
-            # are the same electrical angle, so if the two directions settle on equivalent
-            # offsets a revolution apart, a plain arithmetic mean lands halfway between
-            # them, which is half an electrical turn from either, and meaningless.
+            pooled = {}
+            for scores in scores_by_direction.values():
+                for key, value in scores.items():
+                    pooled.setdefault(key, []).append(value)
+            averaged = {k: sum(v) / len(v) for k, v in pooled.items()}
+            responsive = sum(1 for v in averaged.values() if v > 0)
+            if responsive < 0.25 * len(averaged):
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "Only {0} of {1} offsets produced any acceleration. Without a clear peak there "
+                    "is no reliable alignment.\n\nCheck that the shaft is free and that the sweep "
+                    "current limit is high enough.{2}").format(
+                        responsive, len(averaged),
+                        ("\n\nLast refusal: " + self._arm_failure) if self._arm_failure else ""))
+
+            # Circular mean: offsets a whole electrical revolution apart are the same
+            # angle, so a plain average of the two directions could land opposite them.
             angles = [2.0 * math.pi * ((best - original_offset) % counts_per_electrical_rev)
                       / counts_per_electrical_rev for best in best_per_direction]
             mean_angle = math.atan2(
@@ -399,121 +516,52 @@ class OffsetAlignmentWorker(QObject):
             best_offset = int(round(
                 original_offset + counts_per_electrical_rev * mean_angle / (2.0 * math.pi))) % cpr
 
-            all_readings = {}
-            for readings in readings_by_direction.values():
-                for key, (current, speed) in readings.items():
-                    all_readings.setdefault(key, []).append((current, speed))
-            finite, held_speeds = {}, []
-            for key, pairs in all_readings.items():
-                valid = [(c, sp) for c, sp in pairs if math.isfinite(c) and self._held_speed(sp)]
-                if len(valid) == len(pairs):
-                    finite[key] = sum(c for c, _ in valid) / len(valid)
-                    held_speeds.extend(sp for _, sp in valid)
-
-            # A point scores infinite when the axis refused to arm at that offset. A few
-            # are expected at badly commutated offsets, but if most of them failed there
-            # is no usable minimum and picking one anyway produces a confident, wrong
-            # answer. Fail instead.
-            usable_ratio = len(finite) / max(len(all_readings), 1)
-            if usable_ratio < 0.5:
-                raise RuntimeError(QCoreApplication.translate(
-                    "OffsetAlignmentWorker",
-                    "Only {0} of {1} offsets gave a comparable reading. At the rest the axis "
-                    "would not arm, or the motor stalled or ran away instead of holding the "
-                    "commanded speed. Without most points there is no reliable minimum.\n\n"
-                    "Try a lower test velocity, and raise the sweep current limit if the motor "
-                    "was stalling. Check 'Show Errors' too.{2}").format(
-                        len(finite), len(all_readings),
-                        ("\n\nLast refusal: " + self._arm_failure) if self._arm_failure else ""))
-
-            # The circular mean lands between grid points, so its exact value is usually
-            # not one of the measured offsets. Report the reading from the nearest one
-            # rather than treating the miss as missing data.
-            def circular_distance(a, b):
-                gap = abs(a - b) % counts_per_electrical_rev
-                return min(gap, counts_per_electrical_rev - gap)
-
-            best_current = None
-            if finite:
-                nearest = min(finite, key=lambda o: circular_distance(o, best_offset))
-                if circular_distance(nearest, best_offset) <= step:
-                    best_current = finite[nearest]
-            worst_current = max(finite.values()) if finite else None
-            if best_current is None:
-                raise RuntimeError(QCoreApplication.translate(
-                    "OffsetAlignmentWorker",
-                    "The winning offset had no valid current reading, so the result cannot be "
-                    "trusted. Nothing was changed."))
-
             delta = best_offset - original_offset
-            # Express the shift as the shortest way round the electrical cycle.
             delta = (delta + counts_per_electrical_rev / 2) % counts_per_electrical_rev \
                 - counts_per_electrical_rev / 2
             electrical_degrees = delta * 360.0 / counts_per_electrical_rev
 
-            # This routine refines an existing calibration. A shift beyond a quarter turn
-            # electrical is not a refinement, it is a different commutation point, and in
-            # practice means the sweep measured noise. Refuse rather than apply it.
             if abs(electrical_degrees) > 90.0:
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
                     "The sweep landed {0:.1f} electrical degrees from the calibrated offset. That "
-                    "is a different commutation point, not a refinement, so it was not applied.\n\n"
-                    "This usually means the measurements were noise: the motor may not have been "
-                    "turning freely, or the sweep current limit was too low to move it.{1}")
-                    .format(electrical_degrees, self._measurement_summary(finite)))
+                    "is a different commutation point, not a refinement, so it was not applied."
+                    ).format(electrical_degrees))
 
-            # Torque scales with cos(error), so this stays within 0-100% by construction
-            # once the shift is inside a quarter turn.
-            torque_recovered = (1.0 - math.cos(math.radians(electrical_degrees))) * 100.0
+            def circular_distance(a, b):
+                gap = abs(a - b) % counts_per_electrical_rev
+                return min(gap, counts_per_electrical_rev - gap)
+
+            nearest = min(averaged, key=lambda o: circular_distance(o, best_offset))
+            best_score = averaged[nearest]
 
             setattr(offset_config, offset_attr, int(best_offset))
 
             lines = [
                 QCoreApplication.translate("OffsetAlignmentWorker", "Best alignment found: {0}").format(best_offset),
                 QCoreApplication.translate("OffsetAlignmentWorker",
-                    "Measured {0} of {1} offsets successfully.").format(len(finite), len(all_readings)),
+                    "{0} of {1} offsets produced acceleration.").format(responsive, len(averaged)),
+                "",
+                QCoreApplication.translate("OffsetAlignmentWorker", "Calibration had left {0}.").format(original_offset),
                 QCoreApplication.translate("OffsetAlignmentWorker",
-                    "Speed held on those: {0:.2f} turns/s of {1:.2f} asked.").format(
-                        sum(held_speeds) / len(held_speeds) if held_speeds else 0.0,
-                        self.velocity),
+                    "Difference: {0} counts = {1:.1f} electrical degrees.").format(int(delta), electrical_degrees),
             ]
-            if best_current is not None and worst_current is not None:
+            # Score is proportional to cos(error), so the ratio is the torque that was
+            # being lost, measured rather than inferred from the angle.
+            if best_score > 0:
+                recovered = max(0.0, (1.0 - reference_score / best_score) * 100.0)
                 lines.append(QCoreApplication.translate(
-                    "OffsetAlignmentWorker", "Current there: {0:.2f} A (worst point tested: {1:.2f} A)")
-                    .format(best_current, worst_current))
-            if best_current is not None and math.isfinite(reference_current) and reference_current > 0:
+                    "OffsetAlignmentWorker", "Torque recovered: about {0:.1f}%.").format(recovered))
+            if self._peak_speeds:
                 lines.append(QCoreApplication.translate(
-                    "OffsetAlignmentWorker",
-                    "At the old offset it needed {0:.2f} A, so this saves {1:.1f}%.").format(
-                        reference_current,
-                        100.0 * (reference_current - best_current) / reference_current))
-            lines.append("")
-            lines.append(QCoreApplication.translate(
-                "OffsetAlignmentWorker", "Calibration had left {0}.").format(original_offset))
-            lines.append(QCoreApplication.translate(
-                "OffsetAlignmentWorker", "Difference: {0} counts = {1:.1f} electrical degrees, "
-                "which was costing about {2:.1f}% of torque.")
-                .format(int(delta), electrical_degrees, torque_recovered))
-            lines.append("")
-            # If even the best offset needed most of the allowed current, the motor was
-            # current-starved and every point sat against the limit, which makes the
-            # minimum meaningless. Say so rather than presenting a confident number.
-            if best_current is not None and best_current > 0.5 * self.current_limit:
-                lines.append("")
-                lines.append(QCoreApplication.translate(
-                    "OffsetAlignmentWorker",
-                    "Warning: the best point still drew {0:.2f} A of the {1:.1f} A allowed. The "
-                    "sweep was probably starved of current, so this result is unreliable. Raise "
-                    "the sweep current limit and run it again.").format(best_current, self.current_limit))
-
+                    "OffsetAlignmentWorker", "Peak speed during the sweep: {0:.1f} turns/s.").format(
+                        max(self._peak_speeds)))
             lines.append("")
             lines.append(QCoreApplication.translate(
                 "OffsetAlignmentWorker",
                 "Already applied to the running session. Use 'Save Configuration' to keep it.\n\n"
                 "Note: the offset only survives a reboot when the encoder uses the Z index "
                 "with pre-calibrated enabled."))
-
             self.result.emit(True, "\n".join(lines))
 
         except InterruptedError:
@@ -531,19 +579,18 @@ class OffsetAlignmentWorker(QObject):
             self.result.emit(False, QCoreApplication.translate(
                 "OffsetAlignmentWorker", "The sweep failed: {0}\n\nThe original offset was restored.").format(e))
         finally:
-            # Restoring the drive matters more than reporting, so it runs unconditionally.
             try:
-                self.odrv.axis0.controller.input_vel = 0.0
+                self.odrv.axis0.controller.input_torque = 0.0
                 self.odrv.axis0.requested_state = AXIS_STATE_IDLE
-                for key, attr_path in (('current_lim', ('motor', 'config', 'current_lim')),
-                                       ('control_mode', ('controller', 'config', 'control_mode')),
-                                       ('input_mode', ('controller', 'config', 'input_mode')),
-                                       ('vel_limit', ('controller', 'config', 'vel_limit'))):
+                for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
+                                  ('control_mode', ('controller', 'config', 'control_mode')),
+                                  ('input_mode', ('controller', 'config', 'input_mode')),
+                                  ('vel_limit', ('controller', 'config', 'vel_limit'))):
                     if key in self._saved:
                         target = self.odrv.axis0
-                        for part in attr_path[:-1]:
+                        for part in path[:-1]:
                             target = getattr(target, part)
-                        setattr(target, attr_path[-1], self._saved[key])
+                        setattr(target, path[-1], self._saved[key])
             except Exception:
                 pass
             self.finished.emit()

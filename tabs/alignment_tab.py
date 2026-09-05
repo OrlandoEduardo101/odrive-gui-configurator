@@ -134,10 +134,10 @@ class AlignmentTab(BaseTab):
             "ODrive's offset calibration pushes the rotor against cogging and friction, so on a "
             "direct drive motor it can settle a few electrical degrees off. That error wastes "
             "current as heat without producing torque. This sweep spins the motor with no load at "
-            "many candidate offsets and keeps the one that needs the least current."
+            "many candidate offsets and keeps the one that produces the most torque per amp."
         ))
         self.params_group.setTitle(self.tr("Sweep Parameters"))
-        self.label_velocity.setText(self.tr("Test velocity:"))
+        self.label_velocity.setText(self.tr("Test velocity (unused):"))
         self.label_current.setText(self.tr("Current limit during sweep:"))
         self.label_coarse.setText(self.tr("Coarse points:"))
         self.label_fine.setText(self.tr("Fine points:"))
