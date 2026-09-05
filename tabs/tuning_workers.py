@@ -617,17 +617,22 @@ class BackEmfKtWorker(QObject):
             # and restored afterwards. The drive reacts in its own control loop, far
             # faster than this can poll over USB.
             axis.controller.config.vel_limit = self.max_velocity * 1.3
-            # Only worth arming for the closed loop fallback. An open loop spin turns at
-            # the rate commanded and cannot run away, so the overspeed guard protects
-            # against nothing there while a single noisy velocity sample, which a loose
-            # encoder produces readily, trips it and takes the axis down with it.
-            if not self._lockin_available():
+            # Closed loop is only for the fallback path. The open loop spin does not need
+            # it, and arming it here was left over from the velocity controlled design:
+            # on a motor whose velocity loop cannot hold, that entry alone faulted the
+            # axis, and every lockin measurement afterwards then failed on an axis that
+            # was already in error.
+            use_lockin = self._lockin_available()
+            if not use_lockin:
+                # Only worth arming where a runaway is possible. An open loop spin turns
+                # at the rate commanded, so there the guard protects against nothing
+                # while one noisy velocity sample trips it and takes the axis down.
                 try:
                     axis.controller.config.vel_limit_tolerance = 1.2
                     axis.controller.config.enable_overspeed_error = True
                 except Exception:
                     pass
-            if not self._enter_closed_loop():
+            if not use_lockin and not self._enter_closed_loop():
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The axis would not enter closed loop control."))
 
@@ -658,7 +663,6 @@ class BackEmfKtWorker(QObject):
             targets = [lowest + i * step for i in range(self.speed_count)]
 
             points, unsteady = [], 0
-            use_lockin = self._lockin_available()
             runs = [(1.0, QCoreApplication.translate("BackEmfKtWorker", "forward")),
                     (-1.0, QCoreApplication.translate("BackEmfKtWorker", "reverse"))]
             total = len(targets) * len(runs)
