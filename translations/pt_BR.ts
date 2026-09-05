@@ -2252,6 +2252,18 @@ Detalhes: {0}</translation>
         <source>- (axis not in closed loop)</source>
         <translation>- (eixo fora da malha fechada)</translation>
     </message>
+    <message>
+        <source>Spins the motor with no load and reads the voltage it has to apply. That voltage rises with speed in proportion to the flux linkage, which gives Kt without any weights. Free the shaft first: the motor will spin on its own, both ways.
+
+It drives the motor open loop, so the field turns at exactly the speed asked for. Nothing can run away, and the encoder is only read to confirm the rotor kept up.
+
+Typically within about 5% of the weight method, which stays the more accurate of the two. Running both and comparing is the point.</source>
+        <translation>Gira o motor sem carga e lê a tensão que ele precisa aplicar. Essa tensão sobe com a velocidade proporcionalmente ao fluxo concatenado, o que dá o Kt sem nenhum peso. Libere o eixo antes: o motor vai girar sozinho, nos dois sentidos.
+
+Ele aciona o motor em malha aberta, então o campo gira exatamente na velocidade pedida. Nada pode disparar, e o encoder é lido apenas para confirmar que o rotor acompanhou.
+
+Normalmente fica dentro de uns 5% do método do peso, que continua sendo o mais preciso dos dois. Rodar os dois e comparar é justamente o objetivo.</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>

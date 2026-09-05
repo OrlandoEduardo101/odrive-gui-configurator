@@ -23,6 +23,7 @@ from odrive.enums import AXIS_STATE_IDLE, AXIS_STATE_CLOSED_LOOP_CONTROL
 from odrive.enums import AXIS_STATE_ENCODER_OFFSET_CALIBRATION, AXIS_STATE_ENCODER_INDEX_SEARCH
 from odrive.enums import CONTROL_MODE_VELOCITY_CONTROL, INPUT_MODE_VEL_RAMP
 from odrive.enums import CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH
+from odrive.enums import AXIS_STATE_LOCKIN_SPIN
 
 
 class CalibrationQualityWorker(QObject):
@@ -371,6 +372,8 @@ class BackEmfKtWorker(QObject):
         self._saved = {}
         self._speed_capped = None
         self.runaway_speed = max(self.max_velocity * 2.0, 3.0)
+        self._slipped = 0
+        self.lockin_current = current_limit * 0.6
 
     def stop(self):
         self._is_running = False
@@ -401,6 +404,84 @@ class BackEmfKtWorker(QObject):
                 return True
             time.sleep(0.05)
         return False
+
+    def _lockin_available(self):
+        try:
+            return self.odrv.axis0.config.general_lockin is not None
+        except Exception:
+            return False
+
+    def _measure_lockin(self, omega_electrical):
+        """
+        Spins the motor open loop at a commanded electrical velocity and reads the
+        voltage it takes.
+
+        run_lockin_spin drives the commutation phase from the open loop controller
+        rather than the encoder, so the field turns at exactly the rate asked for. That
+        removes every failure this measurement kept hitting: there is no velocity
+        controller to be untuned, nothing that can run away, and a loose or badly
+        calibrated encoder cannot affect the drive at all. The encoder is read only to
+        confirm the rotor kept up.
+
+        Returns (omega, volts) or None when the rotor slipped or the run was cancelled.
+        """
+        axis = self.odrv.axis0
+        pole_pairs = int(axis.motor.config.pole_pairs)
+        lockin = axis.config.general_lockin
+
+        ramp_time = 0.5
+        accel = max(omega_electrical / 1.5, 1.0)      # up to speed in about 1.5 s
+        spin_up = ramp_time + omega_electrical / accel
+        budget = spin_up + self.settle_s + self.sample_s + 2.0
+
+        lockin.current = float(self.lockin_current)
+        lockin.ramp_time = ramp_time
+        lockin.ramp_distance = 0.0
+        lockin.accel = accel
+        lockin.vel = float(omega_electrical)
+        # Bounded by construction: the spin ends on its own after this distance even if
+        # this side stops driving it, instead of turning until something intervenes.
+        lockin.finish_distance = float(omega_electrical * budget)
+        lockin.finish_on_distance = True
+        lockin.finish_on_vel = False
+        lockin.finish_on_enc_idx = False
+
+        axis.error = 0
+        axis.motor.error = 0
+        axis.requested_state = AXIS_STATE_LOCKIN_SPIN
+
+        deadline = time.time() + spin_up + self.settle_s
+        while time.time() < deadline:
+            if not self._is_running:
+                axis.requested_state = AXIS_STATE_IDLE
+                return None
+            time.sleep(0.05)
+
+        volts, speeds = [], []
+        end = time.time() + self.sample_s
+        while time.time() < end:
+            if not self._is_running:
+                axis.requested_state = AXIS_STATE_IDLE
+                return None
+            if axis.error != 0:
+                break
+            volts.append(self._applied_voltage())
+            speeds.append(abs(axis.encoder.vel_estimate))
+            time.sleep(0.02)
+
+        axis.requested_state = AXIS_STATE_IDLE
+        time.sleep(0.3)
+
+        if not volts:
+            return None
+        # Open loop only holds while the rotor stays in step with the field. If it
+        # slipped, the voltage no longer corresponds to this speed's back-EMF.
+        expected_turns = omega_electrical / (2.0 * math.pi * pole_pairs)
+        measured_turns = sum(speeds) / len(speeds)
+        if expected_turns > 0 and abs(measured_turns - expected_turns) / expected_turns > 0.2:
+            self._slipped += 1
+            return None
+        return omega_electrical, sum(volts) / len(volts)
 
     def _measure_speed(self, velocity):
         """Returns (mean electrical omega, mean |V|, mean Iq) at one commanded speed."""
@@ -488,9 +569,8 @@ class BackEmfKtWorker(QObject):
             return
 
         axis = self.odrv.axis0
-        try:
-            self._applied_voltage()
-        except AttributeError:
+        control = axis.motor.current_control
+        if not (hasattr(control, 'final_v_alpha') and hasattr(control, 'final_v_beta')):
             self.result.emit(False, QCoreApplication.translate(
                 "BackEmfKtWorker",
                 "This firmware does not expose final_v_alpha / final_v_beta, so the applied "
@@ -551,6 +631,7 @@ class BackEmfKtWorker(QObject):
             targets = [lowest + i * step for i in range(self.speed_count)]
 
             points, unsteady = [], 0
+            use_lockin = self._lockin_available()
             runs = [(1.0, QCoreApplication.translate("BackEmfKtWorker", "forward")),
                     (-1.0, QCoreApplication.translate("BackEmfKtWorker", "reverse"))]
             total = len(targets) * len(runs)
@@ -562,9 +643,12 @@ class BackEmfKtWorker(QObject):
                     self.progress.emit(QCoreApplication.translate(
                         "BackEmfKtWorker", "Measuring {0:.1f} turns/s ({1})").format(target, label),
                         int(100 * done / total))
-                    if not self._is_running:
-                        raise InterruptedError
-                    measurement = self._measure_speed(target * direction)
+                    if use_lockin:
+                        omega = direction * target * 2.0 * math.pi * pole_pairs
+                        measured = self._measure_lockin(abs(omega))
+                        measurement = (measured[0], measured[1], 0.0) if measured else None
+                    else:
+                        measurement = self._measure_speed(target * direction)
                     if measurement is not None:
                         points.append(measurement)
                     else:

@@ -259,6 +259,8 @@ class TuningTab(BaseTab):
             "Spins the motor with no load and reads the voltage it has to apply. That voltage "
             "rises with speed in proportion to the flux linkage, which gives Kt without any "
             "weights. Free the shaft first: the motor will spin on its own, both ways.\n\n"
+            "It drives the motor open loop, so the field turns at exactly the speed asked for. "
+            "Nothing can run away, and the encoder is only read to confirm the rotor kept up.\n\n"
             "Typically within about 5% of the weight method, which stays the more accurate of "
             "the two. Running both and comparing is the point."
         ))
