@@ -2533,6 +2533,34 @@ Isto roda a calibração várias vezes, mostra o quanto os resultados se espalha
         <source>That takes about {0:.0f} s, which is past the 25 s limit on the Encoder tab&apos;s own calibration button. Reduce it or that button will time out.</source>
         <translation>Isso leva cerca de {0:.0f} s, além do limite de 25 s do botão de calibração da própria aba Encoder. Reduza, ou aquele botão vai dar timeout.</translation>
     </message>
+    <message>
+        <source>Restore Default Scan</source>
+        <translation>Restaurar Varredura Padrão</translation>
+    </message>
+    <message>
+        <source>Puts calib_scan_distance back to the firmware default of 16*pi electrical radians.</source>
+        <translation>Devolve o calib_scan_distance ao padrão do firmware, 16*pi radianos elétricos.</translation>
+    </message>
+    <message>
+        <source>Could not write the scan distance.
+
+Details: {0}</source>
+        <translation>Não foi possível gravar a distância de varredura.
+
+Detalhes: {0}</translation>
+    </message>
+    <message>
+        <source>Scan Distance Restored</source>
+        <translation>Varredura Restaurada</translation>
+    </message>
+    <message>
+        <source>Scan distance set from {0:.1f} to {1:.1f} electrical radians, which scans in about 8 seconds.
+
+Save the configuration to keep it, or it returns on the next reboot.</source>
+        <translation>Distância de varredura alterada de {0:.1f} para {1:.1f} radianos elétricos, o que varre em cerca de 8 segundos.
+
+Salve a configuração para mantê-la, senão ela volta no próximo reboot.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>

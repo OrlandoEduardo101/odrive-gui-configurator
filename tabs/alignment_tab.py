@@ -100,9 +100,12 @@ class AlignmentTab(BaseTab):
         self.cancel_btn = QPushButton()
         self.cancel_btn.clicked.connect(self.cancel_alignment)
         self.cancel_btn.setEnabled(False)
+        self.restore_scan_btn = QPushButton()
+        self.restore_scan_btn.clicked.connect(self.restore_default_scan)
         controls_row.addWidget(self.start_btn)
         controls_row.addWidget(self.cancel_btn)
         controls_row.addStretch()
+        controls_row.addWidget(self.restore_scan_btn)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
@@ -141,6 +144,8 @@ class AlignmentTab(BaseTab):
         ))
         self.start_btn.setText(self.tr("Check Calibration Quality"))
         self.cancel_btn.setText(self.tr("Cancel"))
+        self.restore_scan_btn.setText(self.tr("Restore Default Scan"))
+        self.restore_scan_btn.setToolTip(self.tr("Puts calib_scan_distance back to the firmware default of 16*pi electrical radians."))
         self._update_estimate()
 
     def _update_estimate(self):
@@ -185,6 +190,32 @@ class AlignmentTab(BaseTab):
                 pass
         self.current_scan_label.setText(self.tr("Connect to see what the board currently scans."))
         self.current_scan_label.setStyleSheet("font-style: italic;")
+
+    def restore_default_scan(self):
+        """
+        Puts calib_scan_distance back to the firmware default.
+
+        An earlier version of this tab left a longer scan behind, which made the Encoder
+        tab's own calibration time out, since that scan no longer fitted in its 25 second
+        limit. A board carrying that value needs it written back, and asking the user to
+        type it into the terminal is a poor way to fix damage this branch caused.
+        """
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        default_distance = 16.0 * math.pi
+        try:
+            previous = odrv.axis0.encoder.config.calib_scan_distance
+            odrv.axis0.encoder.config.calib_scan_distance = default_distance
+        except Exception as e:
+            QMessageBox.critical(self, self.tr("Error"), self.tr(
+                "Could not write the scan distance.\n\nDetails: {0}").format(e))
+            return
+        self._update_estimate()
+        QMessageBox.information(self, self.tr("Scan Distance Restored"), self.tr(
+            "Scan distance set from {0:.1f} to {1:.1f} electrical radians, which scans in about "
+            "8 seconds.\n\nSave the configuration to keep it, or it returns on the next reboot."
+        ).format(previous, default_distance))
 
     def _on_keep_scan_toggled(self, checked):
         self.revolutions_input.setEnabled(not checked)
