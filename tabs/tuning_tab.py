@@ -267,6 +267,7 @@ class TuningTab(BaseTab):
         self.label_auto_vel.setText(self.tr("Top speed:"))
         self.label_auto_points.setText(self.tr("Speeds sampled:"))
         self.label_auto_current.setText(self.tr("Current limit during test:"))
+        self.auto_current.setToolTip(self.tr("The open loop spin drives the motor at 60% of this, so 10 A here turns it with 6 A.\n\nIt only has to overcome cogging and friction and get up to speed. More than that is heat, not accuracy. Raise it only if points are rejected for the rotor slipping."))
         self.auto_start_btn.setText(self.tr("Measure Automatically"))
         self.auto_cancel_btn.setText(self.tr("Cancel"))
         self.auto_apply_btn.setText(self.tr("Apply This Kt"))

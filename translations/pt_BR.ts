@@ -2264,6 +2264,14 @@ Ele aciona o motor em malha aberta, então o campo gira exatamente na velocidade
 
 Normalmente fica dentro de uns 5% do método do peso, que continua sendo o mais preciso dos dois. Rodar os dois e comparar é justamente o objetivo.</translation>
     </message>
+    <message>
+        <source>The open loop spin drives the motor at 60% of this, so 10 A here turns it with 6 A.
+
+It only has to overcome cogging and friction and get up to speed. More than that is heat, not accuracy. Raise it only if points are rejected for the rotor slipping.</source>
+        <translation>O giro em malha aberta aciona o motor com 60% disto, então 10 A aqui o giram com 6 A.
+
+Ele só precisa vencer o cogging e o atrito e chegar na velocidade. Mais que isso é calor, não precisão. Aumente apenas se houver pontos rejeitados por escorregamento do rotor.</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>
