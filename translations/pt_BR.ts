@@ -2509,6 +2509,26 @@ Executar a verificação mesmo assim?</translation>
         <source>Under one full turn, so cogging cannot average out.</source>
         <translation>Menos de uma volta completa, então o cogging não consegue se cancelar.</translation>
     </message>
+    <message>
+        <source>ODrive&apos;s encoder calibration lands in a slightly different place every time it runs, and whichever single run you happened to get is the one you keep.
+
+This runs it several times, shows how far apart the results fall, and applies their average. The scatter is random rather than a bias, so averaging shrinks it by roughly the square root of the number of runs. It uses the native calibration exactly as it is; it just does not trust any single roll of it.</source>
+        <translation>A calibração de encoder da ODrive cai num lugar ligeiramente diferente a cada execução, e a execução que calhou de sair é a que você fica.
+
+Isto roda a calibração várias vezes, mostra o quanto os resultados se espalham, e aplica a média deles. A dispersão é aleatória e não um viés, então a média a encolhe por aproximadamente a raiz quadrada do número de execuções. Usa a calibração nativa exatamente como ela é; apenas não confia em nenhuma execução isolada.</translation>
+    </message>
+    <message>
+        <source>Calibrations to average:</source>
+        <translation>Calibrações para a média:</translation>
+    </message>
+    <message>
+        <source>Keep the board&apos;s scan distance</source>
+        <translation>Manter a distância de varredura da placa</translation>
+    </message>
+    <message>
+        <source>Measured on a 15 pole pair hoverboard motor, the firmware default repeated more tightly than longer scans, and runs far quicker.</source>
+        <translation>Medido num motor de hoverboard de 15 pares de polos, o padrão do firmware se repetiu de forma mais apertada que varreduras longas, e roda bem mais rápido.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -3367,6 +3387,30 @@ The original settings were restored.</source>
         <translation>A verificação falhou: {0}
 
 As configurações originais foram restauradas.</translation>
+    </message>
+    <message>
+        <source>Calibrating</source>
+        <translation>Calibrando</translation>
+    </message>
+    <message>
+        <source>That spread is how much your calibration moves from one run to the next, which is the uncertainty you would be living with had you kept whichever single run you happened to get.</source>
+        <translation>Essa dispersão é o quanto a sua calibração se move de uma execução para a outra — a incerteza com que você conviveria se ficasse com a execução que calhou de sair.</translation>
+    </message>
+    <message>
+        <source>Save the configuration to keep it. It only survives a reboot when the encoder uses the Z index with pre-calibrated enabled.</source>
+        <translation>Salve a configuração para mantê-la. Ela só sobrevive a um reboot quando o encoder usa o índice Z com pre-calibrated habilitado.</translation>
+    </message>
+    <message>
+        <source>A spread this small already costs under 0.2% of torque, so there was little to gain here. Your calibration was in good shape.</source>
+        <translation>Uma dispersão tão pequena já custa menos de 0,2% de torque, então havia pouco a ganhar aqui. Sua calibração estava em boa forma.</translation>
+    </message>
+    <message>
+        <source>{0} calibrations over {1:.2f} mechanical revolutions at {2:.1f} A</source>
+        <translation>{0} calibrações em {1:.2f} voltas mecânicas a {2:.1f} A</translation>
+    </message>
+    <message>
+        <source>Applied the average of all {0}: offset {1}. Averaging random scatter tightens it by about {2:.1f} times, so this is closer to the true alignment than any one run.</source>
+        <translation>Aplicada a média das {0}: offset {1}. Tirar a média de uma dispersão aleatória aperta o resultado em cerca de {2:.1f} vezes, então isto está mais perto do alinhamento verdadeiro do que qualquer execução isolada.</translation>
     </message>
 </context>
 </TS>

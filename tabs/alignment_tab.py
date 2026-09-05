@@ -7,7 +7,7 @@ this sweep can run.
 """
 from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QDoubleSpinBox, QSpinBox, QProgressBar, QMessageBox
+    QDoubleSpinBox, QSpinBox, QProgressBar, QMessageBox, QCheckBox
 )
 import math
 
@@ -61,6 +61,11 @@ class AlignmentTab(BaseTab):
         self.revolutions_input.setDecimals(0)
         self.revolutions_input.setValue(2.0)
 
+        self.keep_scan_check = QCheckBox()
+        self.keep_scan_check.setChecked(True)
+        self.keep_scan_check.toggled.connect(self._on_keep_scan_toggled)
+        self.revolutions_input.setEnabled(False)
+
         self.calib_current_input = QDoubleSpinBox()
         self.calib_current_input.setRange(1.0, 60.0)
         self.calib_current_input.setDecimals(1)
@@ -74,6 +79,7 @@ class AlignmentTab(BaseTab):
         self.label_revolutions = QLabel()
         self.label_calib_current = QLabel()
         params_layout.addRow(self.label_runs, self.runs_input)
+        params_layout.addRow(self.keep_scan_check)
         params_layout.addRow(self.label_revolutions, self.revolutions_input)
         params_layout.addRow(self.label_calib_current, self.calib_current_input)
 
@@ -113,17 +119,17 @@ class AlignmentTab(BaseTab):
     def retranslate_ui(self):
         """Updates all translatable texts in this tab."""
         self.explain_label.setText(self.tr(
-            "ODrive's own calibration already scans forwards and backwards and averages, which "
-            "cancels cogging, but only over the distance it scans. The default is 16*pi electrical "
-            "radians, which on a high pole count motor is well under one mechanical revolution, so "
-            "the cogging in that fraction of a turn never cancels.\n\n"
-            "This runs the calibration repeatedly as configured, then repeatedly over whole "
-            "mechanical revolutions, and reports how much the result moves between runs. The "
-            "spread is the evidence: a calibration that lands in the same place every time is one "
-            "worth trusting."
+            "ODrive's encoder calibration lands in a slightly different place every time it runs, "
+            "and whichever single run you happened to get is the one you keep.\n\n"
+            "This runs it several times, shows how far apart the results fall, and applies their "
+            "average. The scatter is random rather than a bias, so averaging shrinks it by roughly "
+            "the square root of the number of runs. It uses the native calibration exactly as it "
+            "is; it just does not trust any single roll of it."
         ))
         self.params_group.setTitle(self.tr("Check Parameters"))
-        self.label_runs.setText(self.tr("Calibrations per setting:"))
+        self.label_runs.setText(self.tr("Calibrations to average:"))
+        self.keep_scan_check.setText(self.tr("Keep the board's scan distance"))
+        self.keep_scan_check.setToolTip(self.tr("Measured on a 15 pole pair hoverboard motor, the firmware default repeated more tightly than longer scans, and runs far quicker."))
         self.label_revolutions.setText(self.tr("Whole revolutions to scan:"))
         self.label_calib_current.setText(self.tr("Calibration current:"))
         self.runs_input.setToolTip(self.tr("More runs measure the spread better, and take proportionally longer."))
@@ -147,12 +153,14 @@ class AlignmentTab(BaseTab):
         revolutions = self.revolutions_input.value()
         runs = self.runs_input.value()
         pole_pairs = self._pole_pairs()
-        tuned_seconds = (2 * revolutions * pole_pairs * 2 * math.pi) / (4 * math.pi) + 4
-        default_seconds = 8
-        total = runs * (tuned_seconds + default_seconds)
+        if self.keep_scan_check.isChecked():
+            per_run = 8
+        else:
+            per_run = (2 * revolutions * pole_pairs * 2 * math.pi) / (4 * math.pi) + 4
+        total = runs * per_run
         self.estimate_label.setText(
             self.tr("Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations)")
-            .format(total // 60, total % 60, runs * 2))
+            .format(total // 60, total % 60, runs))
 
         if pole_pairs and self.main_window.is_connected and self.main_window.odrv_proxy:
             try:
@@ -171,6 +179,10 @@ class AlignmentTab(BaseTab):
                 pass
         self.current_scan_label.setText(self.tr("Connect to see what the board currently scans."))
         self.current_scan_label.setStyleSheet("font-style: italic;")
+
+    def _on_keep_scan_toggled(self, checked):
+        self.revolutions_input.setEnabled(not checked)
+        self._update_estimate()
 
     def _pole_pairs(self):
         if not self.main_window.is_connected or not self.main_window.odrv_proxy:
@@ -238,6 +250,7 @@ class AlignmentTab(BaseTab):
             runs=self.runs_input.value(),
             mechanical_revolutions=self.revolutions_input.value(),
             calibration_current=self.calib_current_input.value(),
+            keep_scan_distance=self.keep_scan_check.isChecked(),
         )
         self.align_worker.moveToThread(self.align_thread)
 

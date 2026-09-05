@@ -54,12 +54,14 @@ class CalibrationQualityWorker(QObject):
 
     CALIBRATION_TIMEOUT_S = 120
 
-    def __init__(self, odrv, runs, mechanical_revolutions, calibration_current):
+    def __init__(self, odrv, runs, mechanical_revolutions, calibration_current,
+                 keep_scan_distance=True):
         super().__init__()
         self.odrv = odrv
         self.runs = runs
         self.mechanical_revolutions = mechanical_revolutions
         self.calibration_current = calibration_current
+        self.keep_scan_distance = keep_scan_distance
         self._is_running = True
         self._saved = {}
 
@@ -197,80 +199,62 @@ class CalibrationQualityWorker(QObject):
 
         try:
             current_distance = self._saved.get('scan_distance', 16.0 * math.pi)
-            current_revolutions = current_distance / (2.0 * math.pi * pole_pairs)
-            tuned_distance = self.mechanical_revolutions * 2.0 * math.pi * pole_pairs
-
-            before = self._series(QCoreApplication.translate(
-                "CalibrationQualityWorker", "As configured"), 0)
-            if before is None:
-                raise InterruptedError
-
-            axis.encoder.config.calib_scan_distance = float(tuned_distance)
+            if not self.keep_scan_distance:
+                axis.encoder.config.calib_scan_distance = float(
+                    self.mechanical_revolutions * 2.0 * math.pi * pole_pairs)
+                current_distance = axis.encoder.config.calib_scan_distance
             axis.motor.config.calibration_current = float(self.calibration_current)
-            after = self._series(QCoreApplication.translate(
-                "CalibrationQualityWorker", "Over whole revolutions"), 50)
-            if after is None:
+            scanned_revolutions = current_distance / (2.0 * math.pi * pole_pairs)
+
+            offsets = self._series(QCoreApplication.translate(
+                "CalibrationQualityWorker", "Calibrating"), 0)
+            if offsets is None:
                 raise InterruptedError
 
             period = counts_per_electrical_rev
-            before_reduced = self._reduce(before, period)
-            after_reduced = self._reduce(after, period)
-            spread_before = self._circular_spread(before_reduced, period)
-            spread_after = self._circular_spread(after_reduced, period)
+            reduced = self._reduce(offsets, period)
+            spread = self._circular_spread(reduced, period)
+            mean = self._circular_mean(reduced, period)
+
             lines = [
                 QCoreApplication.translate("CalibrationQualityWorker",
-                    "As configured: scan of {0:.2f} mechanical revolutions").format(current_revolutions),
+                    "{0} calibrations over {1:.2f} mechanical revolutions at {2:.1f} A")
+                    .format(self.runs, scanned_revolutions, self.calibration_current),
                 QCoreApplication.translate("CalibrationQualityWorker",
-                    "  offsets {0}").format(", ".join(str(round(v)) for v in before_reduced)),
+                    "  offsets {0}").format(", ".join(str(round(v)) for v in reduced)),
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "  spread {0} counts = {1:.2f} electrical degrees").format(
-                        round(spread_before), to_degrees(spread_before)),
+                        round(spread), to_degrees(spread)),
                 "",
                 QCoreApplication.translate("CalibrationQualityWorker",
-                    "Over {0:.0f} whole revolutions, at {1:.1f} A").format(
-                        self.mechanical_revolutions, self.calibration_current),
-                QCoreApplication.translate("CalibrationQualityWorker",
-                    "  offsets {0}").format(", ".join(str(round(v)) for v in after_reduced)),
-                QCoreApplication.translate("CalibrationQualityWorker",
-                    "  spread {0} counts = {1:.2f} electrical degrees").format(
-                        round(spread_after), to_degrees(spread_after)),
+                    "That spread is how much your calibration moves from one run to the next, "
+                    "which is the uncertainty you would be living with had you kept whichever "
+                    "single run you happened to get."),
                 "",
             ]
 
-            mean_before = self._circular_mean(before_reduced, period)
-            mean_after = self._circular_mean(after_reduced, period)
-            gap = abs((mean_after - mean_before + period / 2) % period - period / 2)
+            # The scatter is random rather than a bias, so averaging shrinks it by the
+            # square root of the number of runs. Nothing exotic: the same native
+            # calibration, just not trusting any single roll of it.
+            improvement = math.sqrt(self.runs)
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                "The two settings land {0:.2f} electrical degrees apart on average.").format(to_degrees(gap)))
-
-            # Spread measures repeatability, not correctness: a scan covering a fraction
-            # of a turn can land on the same wrong answer every time, looking excellent
-            # while carrying the cogging bias of the arc it happened to cover. Scanning
-            # whole revolutions removes that bias by construction, so it is preferred on
-            # principle and the spread is only there to show it is repeatable enough to
-            # be worth trusting.
-            suggested = {'calib_scan_distance': tuned_distance,
-                         'calibration_current': self.calibration_current}
+                "Applied the average of all {0}: offset {1}. Averaging random scatter tightens "
+                "it by about {2:.1f} times, so this is closer to the true alignment than any one "
+                "run.").format(self.runs, round(mean), improvement))
             lines.append("")
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                "That gap is the cogging bias being removed. Cogging repeats with mechanical "
-                "position, so a scan over whole revolutions integrates it away, while a scan over "
-                "part of a turn keeps whatever bias that arc carried. The whole-revolution result "
-                "is the more accurate one even when the shorter scan repeats itself more tightly."))
+                "Save the configuration to keep it. It only survives a reboot when the encoder "
+                "uses the Z index with pre-calibrated enabled."))
 
-            if spread_after > max(spread_before * 3, 1) and to_degrees(spread_after) > 1.0:
+            if to_degrees(spread) < 3.0:
                 lines.append("")
                 lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                    "Note that the longer scan repeats less tightly here ({0:.2f} against {1:.2f} "
-                    "electrical degrees). Raising the calibration current usually tightens it.")
-                    .format(to_degrees(spread_after), to_degrees(spread_before)))
+                    "A spread this small already costs under 0.2% of torque, so there was little "
+                    "to gain here. Your calibration was in good shape."))
 
-            lines.append("")
-            lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                "The longer scan is applied and the encoder is calibrated with it. Save the "
-                "configuration to keep it."))
-
-            self.result.emit(True, "\n".join(lines), suggested)
+            setattr(axis.encoder.config, self._offset_attr, int(round(mean)))
+            self.result.emit(True, "\n".join(lines),
+                             {'phase_offset': int(round(mean)), 'spread_counts': round(spread)})
 
         except InterruptedError:
             self._restore()

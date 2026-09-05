@@ -15,7 +15,7 @@ Cada etapa depende da anterior. Fora de ordem, o resultado é silenciosamente er
 | Etapa | Depende de | Se pular ou inverter |
 |---|---|---|
 | Índice Z | — | O alinhamento não persiste no boot |
-| Calibração | Índice Z | O offset carrega o viés de cogging |
+| Calibração | Índice Z | Você fica com uma calibração sorteada, não a média |
 | Kt | Calibração | Referencial dq torto corrompe a leitura de Iq |
 | `current_lim` | Kt | Você não sabe quantos Nm está pedindo |
 | Térmica | `current_lim` | O motor queima antes de qualquer aviso |
@@ -46,33 +46,27 @@ Sem o índice Z o offset é recalculado a cada boot, e todo o trabalho da etapa 
 
 ---
 
-## 2. Qualidade da calibração do encoder
+## 2. Média da calibração do encoder
 
 **Ajustes → 1. Calibração.**
 
-A calibração da ODrive já varre para frente e para trás e tira a média, o que cancela
-cogging — mas só ao longo da distância varrida. O padrão é `calib_scan_distance = 16π`
-radianos **elétricos**, que em voltas mecânicas dá:
+A calibração de encoder da ODrive cai num lugar ligeiramente diferente a cada execução.
+Medido num hoverboard de 15 pares de polos: **~4,7° elétricos** de dispersão entre
+execuções, com os parâmetros padrão. Você fica com a execução que calhou de sair.
 
-```
-16π / (2π × pares_de_polos) = 8 / pares_de_polos
-```
+A rotina roda a calibração N vezes, mostra a dispersão, e **aplica a média circular**.
+Dispersão aleatória encolhe pela raiz do número de execuções — com 5, cerca de 2,2× mais
+apertado (verificado: erro médio de 3,95° cai para 1,75°).
 
-Com 15 pares de polos isso é **0,53 volta** — pouco mais de meia volta do rotor. O cogging
-se repete com a posição mecânica, então em meia volta ele não se cancela: a calibração
-carrega o viés daquele arco.
+Padrões: 5 calibrações, mantendo a distância de varredura da placa.
 
-A rotina roda a calibração várias vezes como está, depois várias vezes em **voltas
-mecânicas inteiras**, e mostra:
+**Nota sobre a distância de varredura.** A hipótese de que o padrão do firmware
+(`16π` rad elétricos = `8/pares_de_polos` voltas) carregaria viés de cogging **não se
+confirmou** em bancada: varrer 2 voltas inteiras ficou *menos* repetível (11–26° contra
+4,7°) e os dois ajustes caíram a ~1° um do outro. O padrão é mais rápido e melhor.
 
-- a **dispersão** de cada ajuste (o quanto o resultado se move entre execuções)
-- a **diferença entre as médias** — que é o viés de cogging sendo removido
-
-Ao final ela deixa a varredura longa aplicada e o encoder calibrado com ela.
-
-**Dispersão baixa não significa correto.** Uma varredura curta pode repetir o mesmo erro
-com muita consistência. Voltas inteiras são corretas por construção; a dispersão só mostra
-se o resultado é confiável o bastante.
+**Perspectiva:** 4,7° de dispersão custam ~0,3% de torque. Se a sua dispersão for pequena,
+não há muito a ganhar aqui — siga para o Kt, que é onde está o ganho real.
 
 3. **Save Configuration** ao terminar.
 
@@ -209,7 +203,7 @@ voltar a cozinhar o motor.
 | # | Etapa | Onde | Salvar depois |
 |---|---|---|---|
 | 1 | Índice Z + pre_calibrated | Encoder / Motor | sim |
-| 2 | Qualidade da calibração | Ajustes → 1. Calibração | sim |
+| 2 | Média da calibração | Ajustes → 1. Calibração | sim |
 | 3 | Medir e aplicar Kt | Ajustes → 2. Medição de Kt | sim |
 | 4 | `current_lim` | Motor | sim |
 | 5 | Limites térmicos | Ajustes → 3. Segurança | sim |
