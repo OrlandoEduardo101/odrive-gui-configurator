@@ -3234,6 +3234,10 @@ Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
         <source>Measuring {0:.1f} turns/s ({1})</source>
         <translation>Medindo {0:.1f} voltas/s ({1})</translation>
     </message>
+    <message>
+        <source>Top speed was capped from {0:.1f} to {1:.1f} turns/s: above that the back-EMF meets the voltage your bus can supply, the drive saturates, and the readings stop following a line.</source>
+        <translation>A velocidade máxima foi limitada de {0:.1f} para {1:.1f} voltas/s: acima disso a back-EMF encontra a tensão que o seu barramento consegue fornecer, o drive satura, e as leituras deixam de seguir uma reta.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>

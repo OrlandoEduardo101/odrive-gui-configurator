@@ -319,6 +319,7 @@ class BackEmfKtWorker(QObject):
         self.sample_s = sample_s
         self._is_running = True
         self._saved = {}
+        self._speed_capped = None
 
     def stop(self):
         self._is_running = False
@@ -412,6 +413,7 @@ class BackEmfKtWorker(QObject):
             self.finished.emit()
             return
 
+        axis = self.odrv.axis0
         try:
             self._applied_voltage()
         except AttributeError:
@@ -441,10 +443,30 @@ class BackEmfKtWorker(QObject):
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The axis would not enter closed loop control."))
 
+            # Cap the top speed at what the bus can still drive against. Back-EMF grows
+            # with speed until it meets the available voltage, and past that the drive
+            # saturates and the voltage stops rising linearly, which is exactly the
+            # straight line this measurement fits. On a 24 V bus a 15 pole pair motor
+            # reaches that ceiling around 7 turns/s.
+            usable_velocity = self.max_velocity
+            try:
+                configured_kt = float(axis.motor.config.torque_constant)
+                flux_estimate = configured_kt / (1.5 * pole_pairs)
+                # Two thirds of the bus is what the modulator can put on the dq vector,
+                # and 70% of that leaves room for the resistive drop and control margin.
+                available_volts = 0.7 * (2.0 / 3.0) * float(self.odrv.vbus_voltage)
+                if flux_estimate > 0:
+                    ceiling = available_volts / flux_estimate / (2.0 * math.pi * pole_pairs)
+                    if ceiling < usable_velocity:
+                        usable_velocity = max(ceiling, 1.0)
+                        self._speed_capped = (self.max_velocity, usable_velocity)
+            except Exception:
+                pass
+
             # Spread the speeds over the upper half of the range: too slow and the
             # back-EMF is swamped by inverter dead time and the resistive drop.
-            lowest = self.max_velocity / 3.0
-            step = (self.max_velocity - lowest) / max(self.speed_count - 1, 1)
+            lowest = usable_velocity / 3.0
+            step = (usable_velocity - lowest) / max(self.speed_count - 1, 1)
             targets = [lowest + i * step for i in range(self.speed_count)]
 
             points = []
@@ -496,6 +518,13 @@ class BackEmfKtWorker(QObject):
                 lines.append("")
             lines.append(QCoreApplication.translate("BackEmfKtWorker",
                 "Flux linkage {0:.5f} Vs/rad, offset absorbed {1:.2f} V.").format(flux_linkage, intercept))
+            if self._speed_capped:
+                asked, used = self._speed_capped
+                lines.append("")
+                lines.append(QCoreApplication.translate("BackEmfKtWorker",
+                    "Top speed was capped from {0:.1f} to {1:.1f} turns/s: above that the "
+                    "back-EMF meets the voltage your bus can supply, the drive saturates, and the "
+                    "readings stop following a line.").format(asked, used))
             if r_squared < 0.98:
                 lines.append("")
                 lines.append(QCoreApplication.translate("BackEmfKtWorker",
