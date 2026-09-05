@@ -446,8 +446,13 @@ class BackEmfKtWorker(QObject):
         lockin.finish_on_vel = False
         lockin.finish_on_enc_idx = False
 
+        # All four, not just the axis and motor. A stale ControllerError, an OVERSPEED
+        # left behind by an earlier run for instance, blocks the axis from arming and
+        # every attempt then returns nothing.
         axis.error = 0
         axis.motor.error = 0
+        axis.controller.error = 0
+        axis.encoder.error = 0
         axis.requested_state = AXIS_STATE_LOCKIN_SPIN
 
         deadline = time.time() + spin_up + self.settle_s
@@ -588,6 +593,15 @@ class BackEmfKtWorker(QObject):
                 pass
 
         try:
+            # Clear anything left over before starting, so a fault from a previous run
+            # does not make every measurement here fail for a reason that is not this
+            # run's fault.
+            for target, attr in ((axis, 'error'), (axis.motor, 'error'),
+                                 (axis.controller, 'error'), (axis.encoder, 'error')):
+                try:
+                    setattr(target, attr, 0)
+                except Exception:
+                    pass
             axis.motor.config.current_lim = float(self.current_limit)
             # Force feedback setups usually disable the overspeed error, so that fast
             # steering does not fault the drive. That leaves nothing to stop a runaway
@@ -670,7 +684,7 @@ class BackEmfKtWorker(QObject):
                     "or never settled at the rest, "
                     "so there are not enough points to fit a line through.\n\nCheck 'Show Errors': "
                     "the axis is probably faulting. A fit from this few points would report a "
-                    "perfect R squared while measuring nothing.").format(len(usable), len(points)))
+                    "perfect R squared while measuring nothing.").format(len(usable), total))
 
             fit = self._linear_fit([w for w, _ in usable], [v for _, v in usable])
             if fit is None:
