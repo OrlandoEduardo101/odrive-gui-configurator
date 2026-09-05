@@ -184,7 +184,9 @@ class TuningTab(BaseTab):
         self.auto_max_vel.setSuffix(" turns/s")
         self.auto_points = QSpinBox()
         self.auto_points.setRange(3, 12)
-        self.auto_points.setValue(5)
+        # More speeds separate the slope from the offset, which is what actually pins Kt
+        # down. Repeating a three speed run does not achieve the same thing.
+        self.auto_points.setValue(8)
         self.auto_current = QDoubleSpinBox()
         self.auto_current.setRange(1.0, 60.0)
         self.auto_current.setDecimals(1)

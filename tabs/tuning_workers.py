@@ -555,6 +555,15 @@ class BackEmfKtWorker(QObject):
 
     @staticmethod
     def _linear_fit(xs, ys):
+        """
+        Returns (slope, intercept, r_squared, slope_standard_error).
+
+        R squared says whether the points lie on a line; it says nothing about how well
+        the line's slope is pinned down. With few points over a narrow speed range the
+        slope and the intercept trade against each other, so a fit can sit almost
+        perfectly on its points while the slope, which is the answer here, still moves
+        several percent between runs. The standard error is the number that shows that.
+        """
         n = len(xs)
         mean_x, mean_y = sum(xs) / n, sum(ys) / n
         sxx = sum((x - mean_x) ** 2 for x in xs)
@@ -564,7 +573,9 @@ class BackEmfKtWorker(QObject):
         intercept = mean_y - slope * mean_x
         ss_tot = sum((y - mean_y) ** 2 for y in ys)
         ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys))
-        return slope, intercept, (1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0)
+        r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0
+        slope_error = math.sqrt(ss_res / (n - 2) / sxx) if n > 2 and sxx > 0 else 0.0
+        return slope, intercept, r_squared, slope_error
 
     def run(self):
         axis = self.odrv.axis0
@@ -709,7 +720,7 @@ class BackEmfKtWorker(QObject):
             if fit is None:
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "All points landed at the same speed."))
-            flux_linkage, intercept, r_squared = fit
+            flux_linkage, intercept, r_squared, flux_error = fit
             if flux_linkage <= 0:
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The fitted slope is negative, which is not physical."))
@@ -717,7 +728,9 @@ class BackEmfKtWorker(QObject):
             kt = 1.5 * pole_pairs * flux_linkage
             original_limit = self._saved.get('current_lim')
 
-            lines = [QCoreApplication.translate("BackEmfKtWorker", "Kt = {0:.4f} Nm/A").format(kt),
+            kt_error = 1.5 * pole_pairs * flux_error
+            lines = [QCoreApplication.translate("BackEmfKtWorker",
+                         "Kt = {0:.4f} Nm/A, give or take {1:.4f}").format(kt, kt_error),
                      QCoreApplication.translate("BackEmfKtWorker",
                          "Fit quality R² = {0:.4f} over {1} of {2} points.").format(
                              r_squared, len(usable), len(points)),
@@ -736,6 +749,14 @@ class BackEmfKtWorker(QObject):
                     "Top speed was capped from {0:.1f} to {1:.1f} turns/s: above that the "
                     "back-EMF meets the voltage your bus can supply, the drive saturates, and the "
                     "readings stop following a line.").format(asked, used))
+            # A slope this loosely determined is usually too few speeds over too narrow
+            # a range, which more speeds fixes far better than more repeats do.
+            if kt > 0 and kt_error / kt > 0.02:
+                lines.append("")
+                lines.append(QCoreApplication.translate("BackEmfKtWorker",
+                    "That is {0:.1f}% uncertainty on Kt. Sampling more speeds separates the slope "
+                    "from the offset better and tightens it; repeating the run does not.").format(
+                        100.0 * kt_error / kt))
             if r_squared < 0.98:
                 lines.append("")
                 lines.append(QCoreApplication.translate("BackEmfKtWorker",

@@ -3336,6 +3336,14 @@ O controlador de velocidade não está segurando neste motor. O método do peso 
         <source>Only {0} of {1} speeds gave a steady reading. The motor either stayed still or never settled at the rest, so there are not enough points to fit a line through.{2}</source>
         <translation>Só {0} de {1} velocidades deram leitura estável. Nas demais o motor ou ficou parado ou nunca estabilizou, então não há pontos suficientes para ajustar uma reta.{2}</translation>
     </message>
+    <message>
+        <source>Kt = {0:.4f} Nm/A, give or take {1:.4f}</source>
+        <translation>Kt = {0:.4f} Nm/A, mais ou menos {1:.4f}</translation>
+    </message>
+    <message>
+        <source>That is {0:.1f}% uncertainty on Kt. Sampling more speeds separates the slope from the offset better and tightens it; repeating the run does not.</source>
+        <translation>Isso é {0:.1f}% de incerteza no Kt. Amostrar mais velocidades separa melhor a inclinação do offset e aperta o resultado; repetir a execução não.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>
