@@ -3280,6 +3280,18 @@ Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
         <source>Top speed was capped from {0:.1f} to {1:.1f} turns/s: above that the back-EMF meets the voltage your bus can supply, the drive saturates, and the readings stop following a line.</source>
         <translation>A velocidade máxima foi limitada de {0:.1f} para {1:.1f} voltas/s: acima disso a back-EMF encontra a tensão que o seu barramento consegue fornecer, o drive satura, e as leituras deixam de seguir uma reta.</translation>
     </message>
+    <message>
+        <source>Only {0} of {1} speeds produced motion. The motor stayed still at the rest, so there are not enough points to fit a line through.
+
+Check &apos;Show Errors&apos;: the axis is probably faulting. A fit from this few points would report a perfect R squared while measuring nothing.</source>
+        <translation>Só {0} de {1} velocidades produziram movimento. O motor ficou parado nas demais, então não há pontos suficientes para ajustar uma reta.
+
+Veja &apos;Mostrar Erros&apos;: o eixo provavelmente está dando falha. Um ajuste com tão poucos pontos reportaria um R² perfeito enquanto não mede nada.</translation>
+    </message>
+    <message>
+        <source>Fit quality R² = {0:.4f} over {1} of {2} points.</source>
+        <translation>Qualidade do ajuste R² = {0:.4f} em {1} de {2} pontos.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>

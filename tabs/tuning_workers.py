@@ -341,6 +341,9 @@ class BackEmfKtWorker(QObject):
     result = Signal(bool, str, object)     # success, report, measured Kt (or None)
     finished = Signal()
 
+    # Below this the straight line is not being tested, only drawn through the points.
+    MIN_USABLE_POINTS = 5
+
     def __init__(self, odrv, max_velocity, speed_count, current_limit, settle_s, sample_s):
         super().__init__()
         self.odrv = odrv
@@ -523,9 +526,17 @@ class BackEmfKtWorker(QObject):
             self._go_idle()
 
             usable = [(w, v) for w, v, _ in points if w > 1.0]
-            if len(usable) < 2:
+            # Two points always fit a line perfectly, so an R squared of 1.0000 from two
+            # readings is not evidence of a good measurement, it is the absence of any
+            # evidence at all. Enough points to actually test the straight line, or no
+            # answer.
+            if len(usable) < self.MIN_USABLE_POINTS:
                 raise RuntimeError(QCoreApplication.translate(
-                    "BackEmfKtWorker", "The motor did not reach a usable speed."))
+                    "BackEmfKtWorker",
+                    "Only {0} of {1} speeds produced motion. The motor stayed still at the rest, "
+                    "so there are not enough points to fit a line through.\n\nCheck 'Show Errors': "
+                    "the axis is probably faulting. A fit from this few points would report a "
+                    "perfect R squared while measuring nothing.").format(len(usable), len(points)))
 
             fit = self._linear_fit([w for w, _ in usable], [v for _, v in usable])
             if fit is None:
@@ -541,7 +552,8 @@ class BackEmfKtWorker(QObject):
 
             lines = [QCoreApplication.translate("BackEmfKtWorker", "Kt = {0:.4f} Nm/A").format(kt),
                      QCoreApplication.translate("BackEmfKtWorker",
-                         "Fit quality R² = {0:.4f} over {1} points.").format(r_squared, len(usable)),
+                         "Fit quality R² = {0:.4f} over {1} of {2} points.").format(
+                             r_squared, len(usable), len(points)),
                      ""]
             if original_limit:
                 lines.append(QCoreApplication.translate("BackEmfKtWorker",
