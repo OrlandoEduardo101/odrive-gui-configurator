@@ -656,18 +656,22 @@ class BackEmfKtWorker(QObject):
             # faster than this can poll over USB.
             axis.controller.config.vel_limit = self.max_velocity * 1.3
             use_lockin = self._lockin_available()
-            # Only worth arming for the closed loop fallback. An open loop spin turns at
-            # the rate commanded and cannot run away, so the overspeed guard protects
-            # against nothing there while a single noisy velocity sample, which a loose
-            # encoder produces readily, trips it and takes the axis down with it.
+            # Closed loop is only for the fallback path. The open loop spin does not need
+            # it, and arming it here was left over from the velocity controlled design:
+            # on a motor whose velocity loop cannot hold, that entry alone faulted the
+            # axis, and every lockin measurement afterwards then failed on an axis that
+            # was already in error. That is why clearing the errors first changed
+            # nothing: the run recreated them before measuring anything.
             #
-            # Closed loop itself is skipped for the same reason. The open loop spin does
-            # not use the velocity controller, so arming one first would put back the
-            # runaway this path exists to avoid, and would fail the whole measurement on
-            # a drive that cannot arm even though the spin never needed it to.
+            # UNKNOWN_TORQUE is what confirms it. torque_setpoint_src_ is connected only
+            # in run_closed_loop_control, so that error cannot appear unless closed loop
+            # was entered; an open loop spin never touches that path.
             if use_lockin:
                 self._check_lockin_allowed()
             else:
+                # Only worth arming where a runaway is possible. An open loop spin turns
+                # at the rate commanded, so there the guard protects against nothing
+                # while one noisy velocity sample trips it and takes the axis down.
                 try:
                     axis.controller.config.vel_limit_tolerance = 1.2
                     axis.controller.config.enable_overspeed_error = True
