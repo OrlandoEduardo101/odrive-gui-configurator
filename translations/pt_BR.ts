@@ -2664,6 +2664,26 @@ Tente aumentar o limite de corrente da varredura para obter um sinal mais forte.
         <source>Score at the new offset {0:.2f}, at the old one {1:.2f}.</source>
         <translation>Pontuação no offset novo {0:.2f}, no antigo {1:.2f}.</translation>
     </message>
+    <message>
+        <source>The two directions disagree: forward peaked at {0:+.1f} electrical degrees, reverse at {1:+.1f}, a {2:.1f} degree split.
+
+Encoder lag shifts the two peaks in opposite directions, and averaging cancels it, but this split is too wide for the midpoint to be trusted. Nothing was changed.
+
+Try raising the sweep current limit, and check encoder.config.bandwidth.</source>
+        <translation>Os dois sentidos discordam: horário com pico em {0:+.1f} graus elétricos, anti-horário em {1:+.1f}, uma diferença de {2:.1f} graus.
+
+O atraso do encoder desloca os dois picos em sentidos opostos, e a média cancela isso, mas esta diferença é larga demais para o ponto médio ser confiável. Nada foi alterado.
+
+Tente aumentar o limite de corrente da varredura, e confira o encoder.config.bandwidth.</translation>
+    </message>
+    <message>
+        <source>Forward peaked at {0:+.1f}°, reverse at {1:+.1f}°, so encoder lag is about {2:.1f}° and cancels in the average.</source>
+        <translation>Horário com pico em {0:+.1f}°, anti-horário em {1:+.1f}°, então o atraso do encoder é de cerca de {2:.1f}° e se cancela na média.</translation>
+    </message>
+    <message>
+        <source>That much lag also softens force feedback and invites oscillation. Raising encoder.config.bandwidth is usually what reduces it.</source>
+        <translation>Um atraso desse tamanho também amolece o force feedback e favorece oscilação. Aumentar o encoder.config.bandwidth costuma ser o que reduz isso.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>

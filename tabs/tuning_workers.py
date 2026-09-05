@@ -260,9 +260,14 @@ class OffsetAlignmentWorker(QObject):
     ACCEL_SAMPLE_S = 0.25
     REST_SPEED = 0.3            # turns/s counted as stopped
     BRAKE_TIMEOUT_S = 4.0
-    # Both directions measure the same physical thing; beyond this they are not
-    # measuring it well enough to average.
-    DIRECTION_AGREEMENT_DEG = 20.0
+    # The two directions are expected to disagree: encoder phase lag shifts the apparent
+    # peak with the direction of travel, which is precisely why both are measured and
+    # averaged. What matters is that they straddle a common midpoint. Beyond this the
+    # split is too large for the midpoint to mean anything.
+    DIRECTION_AGREEMENT_DEG = 90.0
+    # Past this the lag is worth telling the user about, since it also degrades force
+    # feedback and is usually the encoder bandwidth setting.
+    LAG_WARNING_DEG = 20.0
 
     def _enter_torque_mode(self):
         """Arms closed loop in torque control. Returns True once the axis holds it."""
@@ -535,14 +540,18 @@ class OffsetAlignmentWorker(QObject):
 
             forward_deg, reverse_deg = (signed_degrees(b) for b in best_per_direction)
             split = abs(((forward_deg - reverse_deg) + 180) % 360 - 180)
-            if split > self.DIRECTION_AGREEMENT_DEG:
+            # Lag shifts the two peaks in opposite directions. Peaks on the same side are
+            # not lag, they are two different answers, and averaging them is meaningless.
+            same_side = forward_deg * reverse_deg > 0
+            if split > self.DIRECTION_AGREEMENT_DEG or (same_side and split > self.LAG_WARNING_DEG):
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
                     "The two directions disagree: forward peaked at {0:+.1f} electrical degrees, "
-                    "reverse at {1:+.1f}, a {2:.1f} degree split.\n\nThey measure the same "
-                    "alignment, so a split this wide means the peak is not being resolved. "
-                    "Nothing was changed.\n\nTry raising the sweep current limit for a stronger "
-                    "signal.").format(forward_deg, reverse_deg, split))
+                    "reverse at {1:+.1f}, a {2:.1f} degree split.\n\nEncoder lag shifts the two "
+                    "peaks in opposite directions, and averaging cancels it, but this split is "
+                    "too wide for the midpoint to be trusted. Nothing was changed.\n\nTry "
+                    "raising the sweep current limit, and check "
+                    "encoder.config.bandwidth.").format(forward_deg, reverse_deg, split))
 
             delta = best_offset - original_offset
             delta = (delta + counts_per_electrical_rev / 2) % counts_per_electrical_rev \
@@ -570,8 +579,8 @@ class OffsetAlignmentWorker(QObject):
                 QCoreApplication.translate("OffsetAlignmentWorker",
                     "{0} of {1} offsets produced acceleration.").format(responsive, len(averaged)),
                 QCoreApplication.translate("OffsetAlignmentWorker",
-                    "Forward peaked at {0:+.1f}°, reverse at {1:+.1f}°, agreeing within {2:.1f}°.")
-                    .format(forward_deg, reverse_deg, split),
+                    "Forward peaked at {0:+.1f}°, reverse at {1:+.1f}°, so encoder lag is about "
+                    "{2:.1f}° and cancels in the average.").format(forward_deg, reverse_deg, split / 2.0),
                 QCoreApplication.translate("OffsetAlignmentWorker",
                     "Score at the new offset {0:.2f}, at the old one {1:.2f}.")
                     .format(best_score, reference_score),
@@ -586,6 +595,11 @@ class OffsetAlignmentWorker(QObject):
                 recovered = max(0.0, (1.0 - reference_score / best_score) * 100.0)
                 lines.append(QCoreApplication.translate(
                     "OffsetAlignmentWorker", "Torque recovered: about {0:.1f}%.").format(recovered))
+            if split / 2.0 > self.LAG_WARNING_DEG:
+                lines.append(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "That much lag also softens force feedback and invites oscillation. Raising "
+                    "encoder.config.bandwidth is usually what reduces it."))
             if self._peak_speeds:
                 lines.append(QCoreApplication.translate(
                     "OffsetAlignmentWorker", "Peak speed during the sweep: {0:.1f} turns/s.").format(
