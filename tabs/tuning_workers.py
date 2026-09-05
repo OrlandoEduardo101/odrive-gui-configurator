@@ -343,6 +343,18 @@ class BackEmfKtWorker(QObject):
 
     # Below this the straight line is not being tested, only drawn through the points.
     MIN_USABLE_POINTS = 5
+
+    # Everything this routine changes on the drive, in one place, so that saving and
+    # restoring cannot drift apart: overspeed protection was once saved but not put
+    # back, which would have left a force feedback setup faulting on fast steering.
+    DRIVE_PARAMETERS = (
+        ('current_lim', ('motor', 'config', 'current_lim')),
+        ('control_mode', ('controller', 'config', 'control_mode')),
+        ('input_mode', ('controller', 'config', 'input_mode')),
+        ('vel_limit', ('controller', 'config', 'vel_limit')),
+        ('vel_limit_tolerance', ('controller', 'config', 'vel_limit_tolerance')),
+        ('enable_overspeed_error', ('controller', 'config', 'enable_overspeed_error')),
+    )
     # Fraction of the mean speed the reading may wander during sampling before the point
     # is treated as taken while the motor was still accelerating or hunting.
     MAX_SPEED_SWING = 0.15
@@ -358,6 +370,7 @@ class BackEmfKtWorker(QObject):
         self._is_running = True
         self._saved = {}
         self._speed_capped = None
+        self.runaway_speed = max(self.max_velocity * 2.0, 3.0)
 
     def stop(self):
         self._is_running = False
@@ -409,6 +422,19 @@ class BackEmfKtWorker(QObject):
                 return None
             if axis.error != 0:
                 break
+            # Second layer, in case the drive's own limit is not enough: nothing this
+            # routine measures needs the motor past its test speed, so anything well
+            # beyond it is a runaway and the torque comes off immediately.
+            reached = abs(axis.encoder.vel_estimate)
+            if reached > self.runaway_speed:
+                axis.controller.input_vel = 0.0
+                axis.requested_state = AXIS_STATE_IDLE
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker",
+                    "The motor ran away to {0:.1f} turns/s when {1:.1f} was commanded, so it was "
+                    "stopped.\n\nThe velocity controller is not holding on this motor. The weight "
+                    "method does not use it and is the reliable route here.").format(
+                        reached, abs(velocity)))
             volts.append(self._applied_voltage())
             speeds.append(axis.encoder.vel_estimate)
             currents.append(axis.motor.current_control.Iq_measured)
@@ -472,10 +498,7 @@ class BackEmfKtWorker(QObject):
             self.finished.emit()
             return
 
-        for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
-                          ('control_mode', ('controller', 'config', 'control_mode')),
-                          ('input_mode', ('controller', 'config', 'input_mode')),
-                          ('vel_limit', ('controller', 'config', 'vel_limit'))):
+        for key, path in self.DRIVE_PARAMETERS:
             try:
                 target = axis
                 for part in path[:-1]:
@@ -486,7 +509,17 @@ class BackEmfKtWorker(QObject):
 
         try:
             axis.motor.config.current_lim = float(self.current_limit)
-            axis.controller.config.vel_limit = max(self.max_velocity * 2.0, 5.0)
+            # Force feedback setups usually disable the overspeed error, so that fast
+            # steering does not fault the drive. That leaves nothing to stop a runaway
+            # while this routine drives the motor, so it is turned on for the duration
+            # and restored afterwards. The drive reacts in its own control loop, far
+            # faster than this can poll over USB.
+            axis.controller.config.vel_limit = self.max_velocity * 1.3
+            try:
+                axis.controller.config.vel_limit_tolerance = 1.2
+                axis.controller.config.enable_overspeed_error = True
+            except Exception:
+                pass
             if not self._enter_closed_loop():
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The axis would not enter closed loop control."))
@@ -606,10 +639,7 @@ class BackEmfKtWorker(QObject):
             try:
                 self.odrv.axis0.controller.input_vel = 0.0
                 self.odrv.axis0.requested_state = AXIS_STATE_IDLE
-                for key, path in (('current_lim', ('motor', 'config', 'current_lim')),
-                                  ('control_mode', ('controller', 'config', 'control_mode')),
-                                  ('input_mode', ('controller', 'config', 'input_mode')),
-                                  ('vel_limit', ('controller', 'config', 'vel_limit'))):
+                for key, path in self.DRIVE_PARAMETERS:
                     if key in self._saved:
                         target = self.odrv.axis0
                         for part in path[:-1]:

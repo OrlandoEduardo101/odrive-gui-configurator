@@ -178,7 +178,9 @@ class TuningTab(BaseTab):
         self.auto_max_vel = QDoubleSpinBox()
         self.auto_max_vel.setRange(2.0, 30.0)
         self.auto_max_vel.setDecimals(1)
-        self.auto_max_vel.setValue(10.0)
+        # Enough spread for the fit without spinning the wheel hard. The routine caps
+        # this further against the bus voltage anyway.
+        self.auto_max_vel.setValue(5.0)
         self.auto_max_vel.setSuffix(" turns/s")
         self.auto_points = QSpinBox()
         self.auto_points.setRange(3, 12)

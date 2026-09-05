@@ -3304,6 +3304,14 @@ Check &apos;Show Errors&apos;: the axis is probably faulting. A fit from this fe
 
 Veja &apos;Mostrar Erros&apos;: o eixo provavelmente está dando falha. Um ajuste com tão poucos pontos reportaria um R² perfeito enquanto não mede nada.</translation>
     </message>
+    <message>
+        <source>The motor ran away to {0:.1f} turns/s when {1:.1f} was commanded, so it was stopped.
+
+The velocity controller is not holding on this motor. The weight method does not use it and is the reliable route here.</source>
+        <translation>O motor disparou para {0:.1f} voltas/s quando {1:.1f} foi comandado, então ele foi parado.
+
+O controlador de velocidade não está segurando neste motor. O método do peso não usa esse controlador e é o caminho confiável aqui.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>
