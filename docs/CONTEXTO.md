@@ -51,8 +51,8 @@ ser executadas. Ver `docs/GUIA-AJUSTE-FFB.md` para o procedimento.
 
 | Sub-aba | Arquivo | Estado |
 |---|---|---|
-| 1. Calibração | `tabs/alignment_tab.py` | **não testado em bancada** |
-| 2. Medição de Kt | `tabs/tuning_tab.py` | **não testado em bancada** |
+| 1. Calibração | `tabs/alignment_tab.py` | **testada em bancada**, funciona |
+| 2. Medição de Kt | `tabs/tuning_tab.py` | rodada em bancada, **ainda sem resultado válido** |
 | 3. Segurança | `tabs/safety_tab.py` | **não testado em bancada** |
 | 4. Preset FFB | `tabs/preset_tab.py` | **não testado em bancada** |
 
@@ -132,6 +132,35 @@ construção; a dispersão é só evidência de confiabilidade.
 
 ---
 
+## A medição de Kt: por que ela saiu do controle de velocidade
+
+A aba 2 foi rodada em bancada e falhou de três jeitos seguidos, cada um empurrando o
+método para longe do controle de velocidade:
+
+1. **Disparo.** O controlador de velocidade não segura setpoint neste motor — o mesmo
+   achado da varredura de alinhamento. Ele acelerava além do pedido.
+2. **`ControllerError.OVERSPEED` preso.** O guarda de sobrevelocidade, ligado durante a
+   medição justamente para conter o item 1, disparava e ficava. As execuções seguintes
+   nem armavam, e todas as leituras voltavam vazias.
+3. **"0 de 0 velocidades"** — o relatório contava pontos coletados em vez de tentativas,
+   escondendo que dez medições tinham sido feitas e todas tinham falhado.
+
+**A saída foi o `AXIS_STATE_LOCKIN_SPIN`**: giro em malha aberta, com a fase de comutação
+vinda do controlador open loop em vez do encoder. O campo gira exatamente na taxa pedida.
+Isso remove de uma vez o loop de velocidade destreinado, o disparo e a dependência do
+encoder — que passa a ser lido só para confirmar que o rotor acompanhou.
+
+**Cuidado registrado:** o firmware recusa `LOCKIN_SPIN` em silêncio se o motor não estiver
+calibrado ou se `encoder.config.direction` for 0 (`axis.cpp`). Recusa silenciosa vira
+"0 de 10" e parece defeito da medição. Há uma checagem antes de começar.
+
+**Armadilha do sentido reverso:** `run_lockin_spin` termina em
+`distance × dir >= finish_distance × dir`, com `dir = sinal(vel)`. Um `finish_distance`
+positivo com `vel` negativo já está satisfeito em distância zero — o giro reverso acaba
+antes de começar. O sinal dos dois tem que casar.
+
+---
+
 ## Bugs encontrados por teste (e o que os pegou)
 
 | Bug | Como apareceu |
@@ -174,13 +203,19 @@ para o contexto da classe.
 
 ## O que falta
 
-1. **Testar a aba 1** (qualidade da calibração) — uma execução já diz se a tese da distância
-   de varredura está certa. É o próximo passo imediato.
-2. **Testar a aba 2** (Kt) — é a que resolve o problema real de superaquecimento
-3. **Testar as abas 3 e 4**
-4. `LICENSES` aparece como deletado no working tree; é anterior a este trabalho e foi
+1. **Rodar a aba 2 (Kt) em bancada de novo.** É o próximo passo imediato. O caminho de
+   lockin nunca chegou a completar uma execução no hardware: as correções em cima dele
+   foram validadas contra uma ODrive falsa que reproduz a regra de término do firmware,
+   não contra o motor. O que se espera ver é R² ≥ 0,98 e dez pontos, cinco por sentido.
+2. **Testar as abas 3 e 4**
+3. `LICENSES` aparece como deletado no working tree; é anterior a este trabalho e foi
    deixado de fora dos commits de propósito
-5. Decidir se o branch entra em `main`, depois dos testes
+4. Decidir se o branch entra em `main`, depois dos testes
 
 **Prioridade:** a aba 2. O motor esquentando é o problema declarado, e o Kt correto é o que
-resolve. A aba 1 é refinamento.
+resolve. A aba 1 já rodou e o ganho lá é pequeno (~0,3% de torque).
+
+**Se a aba 2 voltar a falhar,** o que olhar, em ordem: "Show Errors" logo depois (uma recusa
+de estado não aparece como erro, mas um fault aparece); quantos pontos vieram de cada
+sentido, porque um número desigual aponta para o `finish_distance`; e o R², que abaixo de
+0,98 costuma ser o eixo preso em vez da rotina errada.

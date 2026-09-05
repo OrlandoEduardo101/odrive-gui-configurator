@@ -3241,6 +3241,22 @@ Linhas que já coincidem aparecem em verde e não serão gravadas.</translation>
         <translation>O eixo não entrou em controle de malha fechada.</translation>
     </message>
     <message>
+        <source>The motor is not calibrated, so the drive will refuse the open loop spin.
+
+Run the motor calibration on the Motor tab first.</source>
+        <translation>O motor não está calibrado, então a placa vai recusar o giro em malha aberta.
+
+Rode a calibração do motor na aba Motor primeiro.</translation>
+    </message>
+    <message>
+        <source>The encoder direction is not known, so the drive will refuse the open loop spin.
+
+Run the encoder calibration on the Encoder tab first.</source>
+        <translation>O sentido do encoder não é conhecido, então a placa vai recusar o giro em malha aberta.
+
+Rode a calibração do encoder na aba Encoder primeiro.</translation>
+    </message>
+    <message>
         <source>forward</source>
         <translation>sentido horário</translation>
     </message>

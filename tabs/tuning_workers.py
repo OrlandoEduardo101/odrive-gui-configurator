@@ -413,6 +413,33 @@ class BackEmfKtWorker(QObject):
         except Exception:
             return False
 
+    def _check_lockin_allowed(self):
+        """
+        Refuses the run up front when the drive would refuse the spin.
+
+        The firmware gates AXIS_STATE_LOCKIN_SPIN on the motor being calibrated and the
+        encoder direction being known (axis.cpp), and a rejected state request is
+        silent from here: the axis simply never leaves idle. Without this check every
+        speed comes back empty and the report blames the measurement for a setup
+        problem it cannot see.
+        """
+        axis = self.odrv.axis0
+        try:
+            calibrated = bool(axis.motor.is_calibrated)
+            direction = int(axis.encoder.config.direction)
+        except Exception:
+            return          # Cannot tell, so let the spin itself be the judge.
+        if not calibrated:
+            raise RuntimeError(QCoreApplication.translate(
+                "BackEmfKtWorker",
+                "The motor is not calibrated, so the drive will refuse the open loop spin.\n\n"
+                "Run the motor calibration on the Motor tab first."))
+        if direction == 0:
+            raise RuntimeError(QCoreApplication.translate(
+                "BackEmfKtWorker",
+                "The encoder direction is not known, so the drive will refuse the open loop "
+                "spin.\n\nRun the encoder calibration on the Encoder tab first."))
+
     def _measure_lockin(self, omega_electrical):
         """
         Spins the motor open loop at a commanded electrical velocity and reads the
@@ -425,15 +452,18 @@ class BackEmfKtWorker(QObject):
         calibrated encoder cannot affect the drive at all. The encoder is read only to
         confirm the rotor kept up.
 
-        Returns (omega, volts) or None when the rotor slipped or the run was cancelled.
+        Takes a signed velocity: the sign is the direction to spin.
+
+        Returns (|omega|, volts) or None when the rotor slipped or the run was cancelled.
         """
         axis = self.odrv.axis0
         pole_pairs = int(axis.motor.config.pole_pairs)
         lockin = axis.config.general_lockin
 
+        speed = abs(omega_electrical)
         ramp_time = 0.5
-        accel = max(omega_electrical / 1.5, 1.0)      # up to speed in about 1.5 s
-        spin_up = ramp_time + omega_electrical / accel
+        accel = max(speed / 1.5, 1.0)                 # up to speed in about 1.5 s
+        spin_up = ramp_time + speed / accel
         budget = spin_up + self.settle_s + self.sample_s + 2.0
 
         lockin.current = float(self.lockin_current)
@@ -443,7 +473,13 @@ class BackEmfKtWorker(QObject):
         lockin.vel = float(omega_electrical)
         # Bounded by construction: the spin ends on its own after this distance even if
         # this side stops driving it, instead of turning until something intervenes.
-        lockin.finish_distance = float(omega_electrical * budget)
+        #
+        # Signed with the velocity, not left positive. The firmware tests
+        # distance * dir >= finish_distance * dir with dir taken from the sign of vel
+        # (axis.cpp), so a positive finish distance against a negative velocity is
+        # already satisfied at zero distance: the reverse spin would end before it
+        # began, and every reverse point would come back empty.
+        lockin.finish_distance = float(math.copysign(speed * budget, omega_electrical))
         lockin.finish_on_distance = True
         lockin.finish_on_vel = False
         lockin.finish_on_enc_idx = False
@@ -486,12 +522,14 @@ class BackEmfKtWorker(QObject):
             return None
         # Open loop only holds while the rotor stays in step with the field. If it
         # slipped, the voltage no longer corresponds to this speed's back-EMF.
-        expected_turns = omega_electrical / (2.0 * math.pi * pole_pairs)
+        expected_turns = speed / (2.0 * math.pi * pole_pairs)
         measured_turns = sum(speeds) / len(speeds)
         if expected_turns > 0 and abs(measured_turns - expected_turns) / expected_turns > 0.2:
             self._slipped += 1
             return None
-        return omega_electrical, sum(volts) / len(volts)
+        # The magnitude is what the fit wants: |V| rises with |omega| whichever way the
+        # motor is turning, and both directions are points on the same line.
+        return speed, sum(volts) / len(volts)
 
     def _measure_speed(self, velocity):
         """Returns (mean electrical omega, mean |V|, mean Iq) at one commanded speed."""
@@ -628,13 +666,20 @@ class BackEmfKtWorker(QObject):
             # and restored afterwards. The drive reacts in its own control loop, far
             # faster than this can poll over USB.
             axis.controller.config.vel_limit = self.max_velocity * 1.3
+            use_lockin = self._lockin_available()
             # Closed loop is only for the fallback path. The open loop spin does not need
             # it, and arming it here was left over from the velocity controlled design:
             # on a motor whose velocity loop cannot hold, that entry alone faulted the
             # axis, and every lockin measurement afterwards then failed on an axis that
-            # was already in error.
-            use_lockin = self._lockin_available()
-            if not use_lockin:
+            # was already in error. That is why clearing the errors first changed
+            # nothing: the run recreated them before measuring anything.
+            #
+            # UNKNOWN_TORQUE is what confirms it. torque_setpoint_src_ is connected only
+            # in run_closed_loop_control, so that error cannot appear unless closed loop
+            # was entered; an open loop spin never touches that path.
+            if use_lockin:
+                self._check_lockin_allowed()
+            else:
                 # Only worth arming where a runaway is possible. An open loop spin turns
                 # at the rate commanded, so there the guard protects against nothing
                 # while one noisy velocity sample trips it and takes the axis down.
@@ -643,9 +688,9 @@ class BackEmfKtWorker(QObject):
                     axis.controller.config.enable_overspeed_error = True
                 except Exception:
                     pass
-            if not use_lockin and not self._enter_closed_loop():
-                raise RuntimeError(QCoreApplication.translate(
-                    "BackEmfKtWorker", "The axis would not enter closed loop control."))
+                if not self._enter_closed_loop():
+                    raise RuntimeError(QCoreApplication.translate(
+                        "BackEmfKtWorker", "The axis would not enter closed loop control."))
 
             # Cap the top speed at what the bus can still drive against. Back-EMF grows
             # with speed until it meets the available voltage, and past that the drive
@@ -687,7 +732,7 @@ class BackEmfKtWorker(QObject):
                         int(100 * done / total))
                     if use_lockin:
                         omega = direction * target * 2.0 * math.pi * pole_pairs
-                        measured = self._measure_lockin(abs(omega))
+                        measured = self._measure_lockin(omega)
                         measurement = (measured[0], measured[1], 0.0) if measured else None
                     else:
                         measurement = self._measure_speed(target * direction)

@@ -1,0 +1,4 @@
+dist/ODrive GUI Configurador.exe
+build/
+__pycache__/
+*.pyc
