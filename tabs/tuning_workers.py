@@ -53,15 +53,19 @@ class CalibrationQualityWorker(QObject):
     finished = Signal()
 
     CALIBRATION_TIMEOUT_S = 120
+    # Past this the runs are not clustering, so their mean is not a better answer than
+    # any one of them and may be worse than all of them.
+    MAX_SPREAD_TO_APPLY_DEG = 15.0
 
     def __init__(self, odrv, runs, mechanical_revolutions, calibration_current,
-                 keep_scan_distance=True):
+                 keep_scan_distance=True, apply_average=False):
         super().__init__()
         self.odrv = odrv
         self.runs = runs
         self.mechanical_revolutions = mechanical_revolutions
         self.calibration_current = calibration_current
         self.keep_scan_distance = keep_scan_distance
+        self.apply_average = apply_average
         self._is_running = True
         self._saved = {}
 
@@ -238,13 +242,12 @@ class CalibrationQualityWorker(QObject):
             # calibration, just not trusting any single roll of it.
             improvement = math.sqrt(self.runs)
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                "Applied the average of all {0}: offset {1}. Averaging random scatter tightens "
-                "it by about {2:.1f} times, so this is closer to the true alignment than any one "
-                "run.").format(self.runs, round(mean), improvement))
+                "Average of all {0}: offset {1}. Averaging random scatter tightens it by about "
+                "{2:.1f} times.").format(self.runs, round(mean), improvement))
             lines.append("")
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
-                "Save the configuration to keep it. It only survives a reboot when the encoder "
-                "uses the Z index with pre-calibrated enabled."))
+                "An offset only survives a reboot when the encoder uses the Z index with "
+                "pre-calibrated enabled."))
 
             if to_degrees(spread) < 3.0:
                 lines.append("")
@@ -256,8 +259,30 @@ class CalibrationQualityWorker(QObject):
             # longer scan distance behind once made the Encoder tab's own calibration
             # button time out, because that scan no longer fitted in its 25 second limit.
             self._restore()
-            setattr(axis.encoder.config, self._offset_attr, int(round(mean)))
-            lines.append("")
+
+            # Writing the average is opt-in, and refused when the runs disagree. The
+            # circular mean is not robust to an outlier: one run 144 degrees from the
+            # other four once dragged the result far enough to leave the motor worse
+            # commutated than the calibration it replaced. A spread this wide is not a
+            # measurement to average, it is a sign that something went wrong in one of
+            # the runs.
+            if not self.apply_average:
+                lines.append("")
+                lines.append(QCoreApplication.translate("CalibrationQualityWorker",
+                    "Nothing was written. This ran as a measurement only; tick the box to apply "
+                    "the average."))
+            elif to_degrees(spread) > self.MAX_SPREAD_TO_APPLY_DEG:
+                lines.append("")
+                lines.append(QCoreApplication.translate("CalibrationQualityWorker",
+                    "Nothing was written: at {0:.1f} degrees of spread the runs disagree too much "
+                    "to average. An average is only meaningful when the runs cluster, and one bad "
+                    "run would drag it away from the good ones. Recalibrate from the Encoder tab "
+                    "instead.").format(to_degrees(spread)))
+            else:
+                setattr(axis.encoder.config, self._offset_attr, int(round(mean)))
+                lines.append("")
+                lines.append(QCoreApplication.translate("CalibrationQualityWorker",
+                    "Applied. Save the configuration to keep it."))
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
                 "Scan distance and calibration current were put back as they were."))
             self.result.emit(True, "\n".join(lines),

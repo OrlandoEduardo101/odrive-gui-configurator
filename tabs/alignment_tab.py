@@ -61,6 +61,9 @@ class AlignmentTab(BaseTab):
         self.revolutions_input.setDecimals(0)
         self.revolutions_input.setValue(2.0)
 
+        self.apply_check = QCheckBox()
+        self.apply_check.setChecked(False)
+
         self.keep_scan_check = QCheckBox()
         self.keep_scan_check.setChecked(True)
         self.keep_scan_check.toggled.connect(self._on_keep_scan_toggled)
@@ -79,6 +82,7 @@ class AlignmentTab(BaseTab):
         self.label_revolutions = QLabel()
         self.label_calib_current = QLabel()
         params_layout.addRow(self.label_runs, self.runs_input)
+        params_layout.addRow(self.apply_check)
         params_layout.addRow(self.keep_scan_check)
         params_layout.addRow(self.label_revolutions, self.revolutions_input)
         params_layout.addRow(self.label_calib_current, self.calib_current_input)
@@ -131,6 +135,8 @@ class AlignmentTab(BaseTab):
         ))
         self.params_group.setTitle(self.tr("Check Parameters"))
         self.label_runs.setText(self.tr("Calibrations to average:"))
+        self.apply_check.setText(self.tr("Write the average to the board (off = measure only)"))
+        self.apply_check.setToolTip(self.tr("Left off, this only reports how repeatable your calibration is and changes nothing.\nThe average is refused anyway when the runs disagree by more than 15 electrical degrees."))
         self.keep_scan_check.setText(self.tr("Keep the board's scan distance"))
         self.keep_scan_check.setToolTip(self.tr("Measured on a 15 pole pair hoverboard motor, the firmware default repeated more tightly than longer scans, and runs far quicker."))
         self.label_revolutions.setText(self.tr("Whole revolutions to scan:"))
@@ -288,6 +294,7 @@ class AlignmentTab(BaseTab):
             mechanical_revolutions=self.revolutions_input.value(),
             calibration_current=self.calib_current_input.value(),
             keep_scan_distance=self.keep_scan_check.isChecked(),
+            apply_average=self.apply_check.isChecked(),
         )
         self.align_worker.moveToThread(self.align_thread)
 

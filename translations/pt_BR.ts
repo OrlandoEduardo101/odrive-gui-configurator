@@ -2561,6 +2561,16 @@ Save the configuration to keep it, or it returns on the next reboot.</source>
 
 Salve a configuração para mantê-la, senão ela volta no próximo reboot.</translation>
     </message>
+    <message>
+        <source>Write the average to the board (off = measure only)</source>
+        <translation>Gravar a média na placa (desmarcado = só medir)</translation>
+    </message>
+    <message>
+        <source>Left off, this only reports how repeatable your calibration is and changes nothing.
+The average is refused anyway when the runs disagree by more than 15 electrical degrees.</source>
+        <translation>Desmarcado, isto apenas reporta o quanto a sua calibração é repetível e não altera nada.
+A média é recusada de qualquer forma quando as execuções discordam mais de 15 graus elétricos.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -3451,6 +3461,26 @@ As configurações originais foram restauradas.</translation>
     <message>
         <source>Scan distance and calibration current were put back as they were.</source>
         <translation>A distância de varredura e a corrente de calibração foram devolvidas como estavam.</translation>
+    </message>
+    <message>
+        <source>Nothing was written. This ran as a measurement only; tick the box to apply the average.</source>
+        <translation>Nada foi gravado. Isto rodou apenas como medição; marque a caixa para aplicar a média.</translation>
+    </message>
+    <message>
+        <source>Nothing was written: at {0:.1f} degrees of spread the runs disagree too much to average. An average is only meaningful when the runs cluster, and one bad run would drag it away from the good ones. Recalibrate from the Encoder tab instead.</source>
+        <translation>Nada foi gravado: com {0:.1f} graus de dispersão as execuções discordam demais para serem mediadas. Uma média só faz sentido quando as execuções se agrupam, e uma execução ruim puxaria o resultado para longe das boas. Recalibre pela aba Encoder.</translation>
+    </message>
+    <message>
+        <source>Applied. Save the configuration to keep it.</source>
+        <translation>Aplicado. Salve a configuração para manter.</translation>
+    </message>
+    <message>
+        <source>Average of all {0}: offset {1}. Averaging random scatter tightens it by about {2:.1f} times.</source>
+        <translation>Média das {0}: offset {1}. Tirar a média de uma dispersão aleatória aperta o resultado em cerca de {2:.1f} vezes.</translation>
+    </message>
+    <message>
+        <source>An offset only survives a reboot when the encoder uses the Z index with pre-calibrated enabled.</source>
+        <translation>Um offset só sobrevive a um reboot quando o encoder usa o índice Z com pre-calibrated habilitado.</translation>
     </message>
 </context>
 </TS>
