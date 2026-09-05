@@ -260,6 +260,9 @@ class OffsetAlignmentWorker(QObject):
     ACCEL_SAMPLE_S = 0.25
     REST_SPEED = 0.3            # turns/s counted as stopped
     BRAKE_TIMEOUT_S = 4.0
+    # Both directions measure the same physical thing; beyond this they are not
+    # measuring it well enough to average.
+    DIRECTION_AGREEMENT_DEG = 20.0
 
     def _enter_torque_mode(self):
         """Arms closed loop in torque control. Returns True once the axis holds it."""
@@ -522,6 +525,25 @@ class OffsetAlignmentWorker(QObject):
             best_offset = int(round(
                 original_offset + counts_per_electrical_rev * mean_angle / (2.0 * math.pi))) % cpr
 
+            # The two directions measure the same physical alignment, so they must agree.
+            # A wide split means the peak is not being resolved, and the circular mean
+            # between two disagreeing answers is not meaningful.
+            def signed_degrees(offset):
+                gap = (offset - original_offset + counts_per_electrical_rev / 2) \
+                    % counts_per_electrical_rev - counts_per_electrical_rev / 2
+                return gap * 360.0 / counts_per_electrical_rev
+
+            forward_deg, reverse_deg = (signed_degrees(b) for b in best_per_direction)
+            split = abs(((forward_deg - reverse_deg) + 180) % 360 - 180)
+            if split > self.DIRECTION_AGREEMENT_DEG:
+                raise RuntimeError(QCoreApplication.translate(
+                    "OffsetAlignmentWorker",
+                    "The two directions disagree: forward peaked at {0:+.1f} electrical degrees, "
+                    "reverse at {1:+.1f}, a {2:.1f} degree split.\n\nThey measure the same "
+                    "alignment, so a split this wide means the peak is not being resolved. "
+                    "Nothing was changed.\n\nTry raising the sweep current limit for a stronger "
+                    "signal.").format(forward_deg, reverse_deg, split))
+
             delta = best_offset - original_offset
             delta = (delta + counts_per_electrical_rev / 2) % counts_per_electrical_rev \
                 - counts_per_electrical_rev / 2
@@ -547,6 +569,12 @@ class OffsetAlignmentWorker(QObject):
                 QCoreApplication.translate("OffsetAlignmentWorker", "Best alignment found: {0}").format(best_offset),
                 QCoreApplication.translate("OffsetAlignmentWorker",
                     "{0} of {1} offsets produced acceleration.").format(responsive, len(averaged)),
+                QCoreApplication.translate("OffsetAlignmentWorker",
+                    "Forward peaked at {0:+.1f}°, reverse at {1:+.1f}°, agreeing within {2:.1f}°.")
+                    .format(forward_deg, reverse_deg, split),
+                QCoreApplication.translate("OffsetAlignmentWorker",
+                    "Score at the new offset {0:.2f}, at the old one {1:.2f}.")
+                    .format(best_score, reference_score),
                 "",
                 QCoreApplication.translate("OffsetAlignmentWorker", "Calibration had left {0}.").format(original_offset),
                 QCoreApplication.translate("OffsetAlignmentWorker",

@@ -2644,6 +2644,26 @@ Verifique se o eixo está livre e se o limite de corrente da varredura é alto o
         <source>Peak speed during the sweep: {0:.1f} turns/s.</source>
         <translation>Velocidade de pico durante a varredura: {0:.1f} voltas/s.</translation>
     </message>
+    <message>
+        <source>The two directions disagree: forward peaked at {0:+.1f} electrical degrees, reverse at {1:+.1f}, a {2:.1f} degree split.
+
+They measure the same alignment, so a split this wide means the peak is not being resolved. Nothing was changed.
+
+Try raising the sweep current limit for a stronger signal.</source>
+        <translation>Os dois sentidos discordam: horário com pico em {0:+.1f} graus elétricos, anti-horário em {1:+.1f}, uma diferença de {2:.1f} graus.
+
+Eles medem o mesmo alinhamento, então uma diferença dessa magnitude significa que o pico não está sendo resolvido. Nada foi alterado.
+
+Tente aumentar o limite de corrente da varredura para obter um sinal mais forte.</translation>
+    </message>
+    <message>
+        <source>Forward peaked at {0:+.1f}°, reverse at {1:+.1f}°, agreeing within {2:.1f}°.</source>
+        <translation>Horário com pico em {0:+.1f}°, anti-horário em {1:+.1f}°, concordando dentro de {2:.1f}°.</translation>
+    </message>
+    <message>
+        <source>Score at the new offset {0:.2f}, at the old one {1:.2f}.</source>
+        <translation>Pontuação no offset novo {0:.2f}, no antigo {1:.2f}.</translation>
+    </message>
 </context>
 <context>
     <name>TuningContainer</name>
