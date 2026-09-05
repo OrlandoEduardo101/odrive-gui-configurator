@@ -15,8 +15,8 @@ Cada etapa depende da anterior. Fora de ordem, o resultado é silenciosamente er
 | Etapa | Depende de | Se pular ou inverter |
 |---|---|---|
 | Índice Z | — | O alinhamento não persiste no boot |
-| Alinhamento | Índice Z | Corrente vira calor sem virar torque |
-| Kt | Alinhamento | Referencial dq torto corrompe a leitura de Iq |
+| Calibração | Índice Z | O offset carrega o viés de cogging |
+| Kt | Calibração | Referencial dq torto corrompe a leitura de Iq |
 | `current_lim` | Kt | Você não sabe quantos Nm está pedindo |
 | Térmica | `current_lim` | O motor queima antes de qualquer aviso |
 | Preset FFB | Tudo acima | O OpenFFBoard sobrescreve a calibração |
@@ -46,39 +46,35 @@ Sem o índice Z o offset é recalculado a cada boot, e todo o trabalho da etapa 
 
 ---
 
-## 2. Alinhamento do offset elétrico
+## 2. Qualidade da calibração do encoder
 
-**Ajustes → 1. Alinhamento.** É a etapa que resolve superaquecimento.
+**Ajustes → 1. Calibração.**
 
-A calibração nativa da ODrive empurra o rotor contra cogging e atrito, e num direct drive
-pode parar alguns graus elétricos fora do alinhamento real. Esse erro divide a corrente
-comandada: só `cos(erro)` vira torque, o resto vira calor.
+A calibração da ODrive já varre para frente e para trás e tira a média, o que cancela
+cogging — mas só ao longo da distância varrida. O padrão é `calib_scan_distance = 16π`
+radianos **elétricos**, que em voltas mecânicas dá:
 
-| Parâmetro | Valor |
-|---|---|
-| Limite de corrente | **5 A** |
-| Velocidade de teste | 3 turns/s |
-| Pontos grosso / fino | 32 / 21 |
+```
+16π / (2π × pares_de_polos) = 8 / pares_de_polos
+```
 
-**Não existe escalada de corrente.** Subir o limite não melhora o resultado. No offset
-correto a corrente é definida pelo atrito do motor, não pelo teto; nos offsets errados ela
-apenas satura no limite. Como a rotina procura o *mínimo*, um teto maior só gera calor nos
-pontos ruins.
+Com 15 pares de polos isso é **0,53 volta** — pouco mais de meia volta do rotor. O cogging
+se repete com a posição mecânica, então em meia volta ele não se cancela: a calibração
+carrega o viés daquele arco.
 
-O limite só precisa ser alto o bastante para o motor girar na velocidade de teste quando
-bem alinhado. Para um direct drive a 3 turns/s sem carga, 5 A é folgado — e provavelmente
-serve para sempre.
+A rotina roda a calibração várias vezes como está, depois várias vezes em **voltas
+mecânicas inteiras**, e mostra:
 
-**Se ficou baixo demais**, a rotina avisa: quando a corrente do melhor ponto passa de
-metade do limite, o resultado é marcado como não confiável. Aí sim, suba o limite e repita.
+- a **dispersão** de cada ajuste (o quanto o resultado se move entre execuções)
+- a **diferença entre as médias** — que é o viés de cogging sendo removido
 
-O motor **gira sozinho, nos dois sentidos**, inclusive passando por offsets mal comutados
-onde ele solavanca e puxa corrente. Libere o eixo antes.
+Ao final ela deixa a varredura longa aplicada e o encoder calibrado com ela.
 
-Duração: ~5 min. Ao terminar ele mostra o offset antigo, o novo, a diferença em graus
-elétricos e o torque recuperado.
+**Dispersão baixa não significa correto.** Uma varredura curta pode repetir o mesmo erro
+com muita consistência. Voltas inteiras são corretas por construção; a dispersão só mostra
+se o resultado é confiável o bastante.
 
-6. **Save Configuration** ao terminar.
+3. **Save Configuration** ao terminar.
 
 ---
 
@@ -213,7 +209,7 @@ voltar a cozinhar o motor.
 | # | Etapa | Onde | Salvar depois |
 |---|---|---|---|
 | 1 | Índice Z + pre_calibrated | Encoder / Motor | sim |
-| 2 | Alinhamento do offset | Ajustes → 1. Alinhamento | sim |
+| 2 | Qualidade da calibração | Ajustes → 1. Calibração | sim |
 | 3 | Medir e aplicar Kt | Ajustes → 2. Medição de Kt | sim |
 | 4 | `current_lim` | Motor | sim |
 | 5 | Limites térmicos | Ajustes → 3. Segurança | sim |

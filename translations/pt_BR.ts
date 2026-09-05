@@ -2413,6 +2413,102 @@ Only needs to be high enough to spin the motor at the test speed when well align
 
 Só precisa ser alto o bastante para girar o motor na velocidade de teste quando bem alinhado. Aumentar mais só gera calor nos offsets mal comutados, sem melhorar o resultado.</translation>
     </message>
+    <message>
+        <source>ODrive&apos;s own calibration already scans forwards and backwards and averages, which cancels cogging, but only over the distance it scans. The default is 16*pi electrical radians, which on a high pole count motor is well under one mechanical revolution, so the cogging in that fraction of a turn never cancels.
+
+This runs the calibration repeatedly as configured, then repeatedly over whole mechanical revolutions, and reports how much the result moves between runs. The spread is the evidence: a calibration that lands in the same place every time is one worth trusting.</source>
+        <translation>A própria calibração da ODrive já varre para frente e para trás e tira a média, o que cancela o cogging — mas só ao longo da distância que ela varre. O padrão é 16*pi radianos elétricos, o que num motor de muitos polos é bem menos de uma volta mecânica, então o cogging daquela fração de volta nunca se cancela.
+
+Isto roda a calibração repetidamente como está configurada, depois repetidamente em voltas mecânicas inteiras, e reporta o quanto o resultado se move entre execuções. A dispersão é a evidência: uma calibração que cai sempre no mesmo lugar é uma calibração em que vale confiar.</translation>
+    </message>
+    <message>
+        <source>Check Parameters</source>
+        <translation>Parâmetros da Verificação</translation>
+    </message>
+    <message>
+        <source>Calibrations per setting:</source>
+        <translation>Calibrações por ajuste:</translation>
+    </message>
+    <message>
+        <source>Whole revolutions to scan:</source>
+        <translation>Voltas inteiras a varrer:</translation>
+    </message>
+    <message>
+        <source>Calibration current:</source>
+        <translation>Corrente de calibração:</translation>
+    </message>
+    <message>
+        <source>More runs measure the spread better, and take proportionally longer.</source>
+        <translation>Mais execuções medem melhor a dispersão, e demoram proporcionalmente mais.</translation>
+    </message>
+    <message>
+        <source>Cogging repeats with mechanical position, so a scan covering whole revolutions lets it average out.</source>
+        <translation>O cogging se repete com a posição mecânica, então uma varredura que cobre voltas inteiras permite que ele se cancele na média.</translation>
+    </message>
+    <message>
+        <source>Higher current makes the rotor follow the commanded angle instead of sticking in cogging detents.</source>
+        <translation>Mais corrente faz o rotor seguir o ângulo comandado em vez de ficar preso nos detentes de cogging.</translation>
+    </message>
+    <message>
+        <source>The motor will turn on its own during each calibration. Free the shaft before starting.</source>
+        <translation>O motor vai girar sozinho durante cada calibração. Libere o eixo antes de começar.</translation>
+    </message>
+    <message>
+        <source>Check Calibration Quality</source>
+        <translation>Verificar Qualidade da Calibração</translation>
+    </message>
+    <message>
+        <source>Connect to see what the board currently scans.</source>
+        <translation>Conecte para ver quanto a placa varre atualmente.</translation>
+    </message>
+    <message>
+        <source>The motor will run its calibration several times, turning on its own.
+
+Is the shaft free and clear?</source>
+        <translation>O motor vai rodar a calibração várias vezes, girando sozinho.
+
+O eixo está livre e desobstruído?</translation>
+    </message>
+    <message>
+        <source>Check complete.</source>
+        <translation>Verificação concluída.</translation>
+    </message>
+    <message>
+        <source>Check Complete</source>
+        <translation>Verificação Concluída</translation>
+    </message>
+    <message>
+        <source>Check did not complete.</source>
+        <translation>A verificação não foi concluída.</translation>
+    </message>
+    <message>
+        <source>Check Failed</source>
+        <translation>Falha na Verificação</translation>
+    </message>
+    <message>
+        <source>Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations)</source>
+        <translation>Duração estimada: cerca de {0:.0f} min {1:.0f} s ({2} calibrações)</translation>
+    </message>
+    <message>
+        <source>This encoder is not set to use the Z index.
+
+Without it each calibration starts from a different reference, so the spread will look worse than it really is.
+
+Run the check anyway?</source>
+        <translation>Este encoder não está configurado para usar o índice Z.
+
+Sem ele cada calibração parte de uma referência diferente, então a dispersão vai parecer pior do que realmente é.
+
+Executar a verificação mesmo assim?</translation>
+    </message>
+    <message>
+        <source>The board currently scans {0:.2f} mechanical revolutions ({1} pole pairs).</source>
+        <translation>A placa varre atualmente {0:.2f} voltas mecânicas ({1} pares de polos).</translation>
+    </message>
+    <message>
+        <source>Under one full turn, so cogging cannot average out.</source>
+        <translation>Menos de uma volta completa, então o cogging não consegue se cancelar.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -2718,6 +2814,10 @@ Tente aumentar o limite de corrente da varredura, e confira o encoder.config.ban
     <message>
         <source>4. FFB Preset</source>
         <translation>4. Preset FFB</translation>
+    </message>
+    <message>
+        <source>1. Calibration</source>
+        <translation>1. Calibração</translation>
     </message>
 </context>
 <context>
@@ -3184,6 +3284,89 @@ Verifique a conexão com a internet.</translation>
     <message>
         <source>The downloaded file is not a firmware image. Nothing was saved.</source>
         <translation>O arquivo baixado não é uma imagem de firmware. Nada foi salvo.</translation>
+    </message>
+</context>
+<context>
+    <name>CalibrationQualityWorker</name>
+    <message>
+        <source>Could not find the encoder offset property on this firmware.</source>
+        <translation>Não foi possível encontrar a propriedade de offset do encoder neste firmware.</translation>
+    </message>
+    <message>
+        <source>Encoder CPR and pole pairs must both be positive.</source>
+        <translation>O CPR do encoder e os pares de polos precisam ser ambos positivos.</translation>
+    </message>
+    <message>
+        <source>As configured</source>
+        <translation>Como configurado</translation>
+    </message>
+    <message>
+        <source>Over whole revolutions</source>
+        <translation>Em voltas inteiras</translation>
+    </message>
+    <message>
+        <source>That gap is the cogging bias being removed. Cogging repeats with mechanical position, so a scan over whole revolutions integrates it away, while a scan over part of a turn keeps whatever bias that arc carried. The whole-revolution result is the more accurate one even when the shorter scan repeats itself more tightly.</source>
+        <translation>Essa diferença é o viés de cogging sendo removido. O cogging se repete com a posição mecânica, então uma varredura em voltas inteiras o integra a zero, enquanto uma varredura em parte de uma volta guarda o viés daquele arco. O resultado em voltas inteiras é o mais exato, mesmo quando a varredura curta se repete de forma mais apertada.</translation>
+    </message>
+    <message>
+        <source>The longer scan is applied and the encoder is calibrated with it. Save the configuration to keep it.</source>
+        <translation>A varredura mais longa está aplicada e o encoder foi calibrado com ela. Salve a configuração para mantê-la.</translation>
+    </message>
+    <message>
+        <source>Cancelled. The original settings were restored.</source>
+        <translation>Cancelado. As configurações originais foram restauradas.</translation>
+    </message>
+    <message>
+        <source>Connection to the ODrive was lost.</source>
+        <translation>A conexão com a ODrive foi perdida.</translation>
+    </message>
+    <message>
+        <source>The axis reported an error during calibration: {0}</source>
+        <translation>O eixo reportou um erro durante a calibração: {0}</translation>
+    </message>
+    <message>
+        <source>{0}: calibration {1} of {2}...</source>
+        <translation>{0}: calibração {1} de {2}...</translation>
+    </message>
+    <message>
+        <source>As configured: scan of {0:.2f} mechanical revolutions</source>
+        <translation>Como configurado: varredura de {0:.2f} voltas mecânicas</translation>
+    </message>
+    <message>
+        <source>  offsets {0}</source>
+        <translation>  offsets {0}</translation>
+    </message>
+    <message>
+        <source>  spread {0} counts = {1:.2f} electrical degrees</source>
+        <translation>  dispersão {0} contas = {1:.2f} graus elétricos</translation>
+    </message>
+    <message>
+        <source>Over {0:.0f} whole revolutions, at {1:.1f} A</source>
+        <translation>Em {0:.0f} voltas inteiras, a {1:.1f} A</translation>
+    </message>
+    <message>
+        <source>The two settings land {0:.2f} electrical degrees apart on average.</source>
+        <translation>Os dois ajustes ficam a {0:.2f} graus elétricos de distância, em média.</translation>
+    </message>
+    <message>
+        <source>The calibration did not finish within {0} seconds.</source>
+        <translation>A calibração não terminou dentro de {0} segundos.</translation>
+    </message>
+    <message>
+        <source>Could not read the encoder or motor config: {0}</source>
+        <translation>Não foi possível ler a configuração do encoder ou do motor: {0}</translation>
+    </message>
+    <message>
+        <source>Note that the longer scan repeats less tightly here ({0:.2f} against {1:.2f} electrical degrees). Raising the calibration current usually tightens it.</source>
+        <translation>Note que a varredura mais longa se repete de forma menos apertada aqui ({0:.2f} contra {1:.2f} graus elétricos). Aumentar a corrente de calibração costuma melhorar isso.</translation>
+    </message>
+    <message>
+        <source>The check failed: {0}
+
+The original settings were restored.</source>
+        <translation>A verificação falhou: {0}
+
+As configurações originais foram restauradas.</translation>
     </message>
 </context>
 </TS>

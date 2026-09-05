@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QDoubleSpinBox, QSpinBox, QProgressBar, QMessageBox
 )
+import math
+
 from PySide6.QtCore import Qt, QEvent, QThread
 
 from .base_tab import BaseTab
-from .tuning_workers import OffsetAlignmentWorker
+from .tuning_workers import CalibrationQualityWorker
 from app_config import AppColors
 
 # Rough per-point overhead for the idle/arm/disarm transitions around each measurement.
@@ -48,56 +50,36 @@ class AlignmentTab(BaseTab):
         self.params_group = QGroupBox()
         params_layout = QFormLayout(self.params_group)
 
-        self.velocity_input = QDoubleSpinBox()
-        self.velocity_input.setRange(0.5, 20.0)
-        self.velocity_input.setDecimals(1)
-        self.velocity_input.setValue(3.0)
-        self.velocity_input.setSuffix(" turns/s")
+        self.runs_input = QSpinBox()
+        self.runs_input.setRange(2, 10)
+        self.runs_input.setValue(3)
 
-        self.current_input = QDoubleSpinBox()
-        self.current_input.setRange(1.0, 60.0)
-        self.current_input.setDecimals(1)
-        # Only has to spin an unloaded motor at the test speed. Higher buys nothing and
-        # heats the motor at the badly commutated offsets; the worker warns if it is low.
-        self.current_input.setValue(5.0)
-        self.current_input.setSuffix(" A")
+        # Whole mechanical revolutions, so cogging averages out instead of leaving a
+        # bias in whatever fraction of a turn the scan happened to cover.
+        self.revolutions_input = QDoubleSpinBox()
+        self.revolutions_input.setRange(1.0, 10.0)
+        self.revolutions_input.setDecimals(0)
+        self.revolutions_input.setValue(2.0)
 
-        # 32 coarse and 21 fine points land within a fraction of an electrical degree
-        # of the true optimum; coarser grids leave over a degree of residual error.
-        self.coarse_input = QSpinBox()
-        self.coarse_input.setRange(8, 64)
-        self.coarse_input.setValue(32)
+        self.calib_current_input = QDoubleSpinBox()
+        self.calib_current_input.setRange(1.0, 60.0)
+        self.calib_current_input.setDecimals(1)
+        self.calib_current_input.setValue(10.0)
+        self.calib_current_input.setSuffix(" A")
 
-        self.fine_input = QSpinBox()
-        self.fine_input.setRange(3, 31)
-        self.fine_input.setValue(21)
-
-        self.revolutions_input = QSpinBox()
-        self.revolutions_input.setRange(1, 10)
-        self.revolutions_input.setValue(2)
-
-        self.settle_input = QDoubleSpinBox()
-        self.settle_input.setRange(0.2, 5.0)
-        self.settle_input.setDecimals(1)
-        self.settle_input.setValue(1.0)
-        self.settle_input.setSuffix(" s")
-
-        for widget in (self.velocity_input, self.current_input, self.coarse_input,
-                       self.fine_input, self.revolutions_input, self.settle_input):
+        for widget in (self.runs_input, self.revolutions_input, self.calib_current_input):
             widget.valueChanged.connect(self._update_estimate)
 
-        self.label_velocity = QLabel()
-        self.label_current = QLabel()
-        self.label_coarse = QLabel()
-        self.label_fine = QLabel()
+        self.label_runs = QLabel()
         self.label_revolutions = QLabel()
-        self.label_settle = QLabel()
-        params_layout.addRow(self.label_velocity, self.velocity_input)
-        params_layout.addRow(self.label_current, self.current_input)
-        params_layout.addRow(self.label_coarse, self.coarse_input)
-        params_layout.addRow(self.label_fine, self.fine_input)
+        self.label_calib_current = QLabel()
+        params_layout.addRow(self.label_runs, self.runs_input)
         params_layout.addRow(self.label_revolutions, self.revolutions_input)
-        params_layout.addRow(self.label_settle, self.settle_input)
+        params_layout.addRow(self.label_calib_current, self.calib_current_input)
+
+        self.current_scan_label = QLabel()
+        self.current_scan_label.setWordWrap(True)
+        params_layout.addRow(self.current_scan_label)
 
         self.estimate_label = QLabel()
         params_layout.addRow(self.estimate_label)
@@ -131,45 +113,72 @@ class AlignmentTab(BaseTab):
     def retranslate_ui(self):
         """Updates all translatable texts in this tab."""
         self.explain_label.setText(self.tr(
-            "ODrive's offset calibration pushes the rotor against cogging and friction, so on a "
-            "direct drive motor it can settle a few electrical degrees off. That error wastes "
-            "current as heat without producing torque. This sweep spins the motor with no load at "
-            "many candidate offsets and keeps the one that produces the most torque per amp."
+            "ODrive's own calibration already scans forwards and backwards and averages, which "
+            "cancels cogging, but only over the distance it scans. The default is 16*pi electrical "
+            "radians, which on a high pole count motor is well under one mechanical revolution, so "
+            "the cogging in that fraction of a turn never cancels.\n\n"
+            "This runs the calibration repeatedly as configured, then repeatedly over whole "
+            "mechanical revolutions, and reports how much the result moves between runs. The "
+            "spread is the evidence: a calibration that lands in the same place every time is one "
+            "worth trusting."
         ))
-        self.params_group.setTitle(self.tr("Sweep Parameters"))
-        self.label_velocity.setText(self.tr("Test velocity (unused):"))
-        self.label_current.setText(self.tr("Current limit during sweep:"))
-        self.label_coarse.setText(self.tr("Coarse points:"))
-        self.label_fine.setText(self.tr("Fine points:"))
-        self.label_revolutions.setText(self.tr("Revolutions sampled per point:"))
-        self.label_settle.setText(self.tr("Settle time per point:"))
-
-        self.velocity_input.setToolTip(self.tr("Speed the motor spins at while each offset is scored."))
-        self.current_input.setToolTip(self.tr("Temporarily replaces the motor current limit during the sweep.\n\nOnly needs to be high enough to spin the motor at the test speed when well aligned. Raising it further adds heat at the badly commutated offsets without improving the result."))
-        self.coarse_input.setToolTip(self.tr("How many offsets are tested across one full electrical revolution."))
-        self.fine_input.setToolTip(self.tr("Extra points tested around the coarse winner."))
-        self.revolutions_input.setToolTip(self.tr("Sampling over whole mechanical revolutions averages cogging out."))
-        self.settle_input.setToolTip(self.tr("Time to let the speed stabilise before sampling starts."))
+        self.params_group.setTitle(self.tr("Check Parameters"))
+        self.label_runs.setText(self.tr("Calibrations per setting:"))
+        self.label_revolutions.setText(self.tr("Whole revolutions to scan:"))
+        self.label_calib_current.setText(self.tr("Calibration current:"))
+        self.runs_input.setToolTip(self.tr("More runs measure the spread better, and take proportionally longer."))
+        self.revolutions_input.setToolTip(self.tr("Cogging repeats with mechanical position, so a scan covering whole revolutions lets it average out."))
+        self.calib_current_input.setToolTip(self.tr("Higher current makes the rotor follow the commanded angle instead of sticking in cogging detents."))
 
         self.warning_label.setText(self.tr(
-            "The motor will spin on its own, in both directions, including at badly commutated "
-            "offsets where it jerks and draws current. Free the shaft and remove anything attached "
-            "to the wheel before starting."
+            "The motor will turn on its own during each calibration. Free the shaft before starting."
         ))
-        self.start_btn.setText(self.tr("Start Alignment Sweep"))
+        self.start_btn.setText(self.tr("Check Calibration Quality"))
         self.cancel_btn.setText(self.tr("Cancel"))
         self._update_estimate()
 
     def _update_estimate(self):
-        """Shows roughly how long the sweep will take, so the duration is no surprise."""
-        points = (self.coarse_input.value() + self.fine_input.value()) * 2
-        per_point = (self.settle_input.value()
-                     + self.revolutions_input.value() / max(self.velocity_input.value(), 0.1)
-                     + POINT_OVERHEAD_S)
-        total = points * per_point
+        """
+        Shows how long the check will take, and what the board's current scan distance
+        works out to in mechanical revolutions, which is the number that matters.
+        """
+        # The scan runs forward then back at calib_scan_omega, 4*pi electrical rad/s by
+        # default, plus the fixed overhead of arming and settling around each run.
+        revolutions = self.revolutions_input.value()
+        runs = self.runs_input.value()
+        pole_pairs = self._pole_pairs()
+        tuned_seconds = (2 * revolutions * pole_pairs * 2 * math.pi) / (4 * math.pi) + 4
+        default_seconds = 8
+        total = runs * (tuned_seconds + default_seconds)
         self.estimate_label.setText(
-            self.tr("Estimated duration: about {0:.0f} min {1:.0f} s ({2} measurements)")
-            .format(total // 60, total % 60, points))
+            self.tr("Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations)")
+            .format(total // 60, total % 60, runs * 2))
+
+        if pole_pairs and self.main_window.is_connected and self.main_window.odrv_proxy:
+            try:
+                distance = self.main_window.odrv_proxy.odrv.axis0.encoder.config.calib_scan_distance
+                current_revs = distance / (2 * math.pi * pole_pairs)
+                text = self.tr("The board currently scans {0:.2f} mechanical revolutions ({1} pole pairs).").format(
+                    current_revs, pole_pairs)
+                if current_revs < 0.95:
+                    text += " " + self.tr("Under one full turn, so cogging cannot average out.")
+                    self.current_scan_label.setStyleSheet(f"color: {AppColors.WARNING};")
+                else:
+                    self.current_scan_label.setStyleSheet(f"color: {AppColors.SUCCESS};")
+                self.current_scan_label.setText(text)
+                return
+            except Exception:
+                pass
+        self.current_scan_label.setText(self.tr("Connect to see what the board currently scans."))
+        self.current_scan_label.setStyleSheet("font-style: italic;")
+
+    def _pole_pairs(self):
+        if not self.main_window.is_connected or not self.main_window.odrv_proxy:
+            return 0
+        try:
+            return int(self.main_window.odrv_proxy.odrv.axis0.motor.config.pole_pairs)
+        except Exception:
+            return 0
 
     # ------------------------------------------------------------- routine ---
 
@@ -190,9 +199,9 @@ class AlignmentTab(BaseTab):
                 return False
             if not odrv.axis0.encoder.config.use_index:
                 proceed = QMessageBox.question(self, self.tr("Index Not Enabled"), self.tr(
-                    "This encoder is not set to use the Z index.\n\nWithout it the offset is "
-                    "recalculated on every boot, so the value found here cannot be saved "
-                    "permanently.\n\nRun the sweep anyway?"),
+                    "This encoder is not set to use the Z index.\n\nWithout it each calibration "
+                    "starts from a different reference, so the spread will look worse than it "
+                    "really is.\n\nRun the check anyway?"),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if proceed != QMessageBox.StandardButton.Yes:
                     return False
@@ -213,7 +222,7 @@ class AlignmentTab(BaseTab):
             return
 
         confirm = QMessageBox.question(self, self.tr("Confirm"), self.tr(
-            "The motor is about to spin unattended in both directions for several minutes.\n\n"
+            "The motor will run its calibration several times, turning on its own.\n\n"
             "Is the shaft free and clear?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if confirm != QMessageBox.StandardButton.Yes:
@@ -224,14 +233,11 @@ class AlignmentTab(BaseTab):
         self.progress_bar.setValue(0)
 
         self.align_thread = QThread()
-        self.align_worker = OffsetAlignmentWorker(
+        self.align_worker = CalibrationQualityWorker(
             odrv,
-            velocity=self.velocity_input.value(),
-            current_limit=self.current_input.value(),
-            coarse_points=self.coarse_input.value(),
-            fine_points=self.fine_input.value(),
-            revolutions=self.revolutions_input.value(),
-            settle_s=self.settle_input.value(),
+            runs=self.runs_input.value(),
+            mechanical_revolutions=self.revolutions_input.value(),
+            calibration_current=self.calib_current_input.value(),
         )
         self.align_worker.moveToThread(self.align_thread)
 
@@ -255,14 +261,14 @@ class AlignmentTab(BaseTab):
         self.status_label.setText(message)
         self.progress_bar.setValue(percent)
 
-    def _on_result(self, success, message):
+    def _on_result(self, success, message, suggested):
         if success:
             self.progress_bar.setValue(100)
-            self.status_label.setText(self.tr("Alignment complete."))
-            QMessageBox.information(self, self.tr("Alignment Complete"), message)
+            self.status_label.setText(self.tr("Check complete."))
+            QMessageBox.information(self, self.tr("Check Complete"), message)
         else:
-            self.status_label.setText(self.tr("Alignment did not complete."))
-            QMessageBox.warning(self, self.tr("Alignment Failed"), message)
+            self.status_label.setText(self.tr("Check did not complete."))
+            QMessageBox.warning(self, self.tr("Check Failed"), message)
 
     def _on_thread_finished(self):
         self.align_thread, self.align_worker = None, None

@@ -43,8 +43,8 @@ class TuningContainer(BaseTab):
         """
         The sub-tabs in the order they must be run.
 
-        Alignment comes before Kt because a misaligned dq frame skews the current
-        readings the Kt measurement depends on. Safety follows, since the current limit
+        Calibration quality comes before Kt because a skewed dq frame corrupts the
+        current readings the Kt measurement depends on. Safety follows, since the current limit
         it guards only becomes meaningful once Kt is known. The FFB preset is last:
         it arms the drive on boot, which is what stops OpenFFBoard from recalibrating
         over the alignment.
@@ -59,7 +59,7 @@ class TuningContainer(BaseTab):
     def retranslate_ui(self):
         """Re-translates this container's tab labels and every sub-tab."""
         # Numbered so the required order is visible rather than implied.
-        for index, text in enumerate((self.tr("1. Alignment"), self.tr("2. Kt Measurement"),
+        for index, text in enumerate((self.tr("1. Calibration"), self.tr("2. Kt Measurement"),
                                       self.tr("3. Safety"), self.tr("4. FFB Preset"))):
             self.inner_tabs.setTabText(index, text)
         for widget in self.ordered_tabs():
