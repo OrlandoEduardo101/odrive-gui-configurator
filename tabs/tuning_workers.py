@@ -254,7 +254,10 @@ class OffsetAlignmentWorker(QObject):
     # cos(error), which peaks exactly at the aligned offset and needs neither the
     # inertia nor the torque constant to be known.
 
-    ACCEL_SAMPLE_S = 0.4        # long enough to fit a slope, short enough to stay slow
+    # Deliberately gentle. The slope is just as measurable at a fraction of the allowed
+    # current, and a wheel is attached to this: a short, light push keeps the peak speed
+    # near a turn per second instead of flinging the rim.
+    ACCEL_SAMPLE_S = 0.25
     REST_SPEED = 0.3            # turns/s counted as stopped
     BRAKE_TIMEOUT_S = 4.0
 
@@ -315,14 +318,14 @@ class OffsetAlignmentWorker(QObject):
         setattr(offset_config, offset_attr, int(offset))
         if not self._enter_torque_mode():
             self._go_idle()
-            return 0.0, 0.0
+            return float('-inf'), 0.0
 
         axis = self.odrv.axis0
         torque = self._test_torque
         if not self._brake_to_rest(torque):
             axis.controller.input_torque = 0.0
             self._go_idle()
-            return 0.0, 0.0
+            return float('-inf'), 0.0
 
         axis.controller.input_torque = sign * torque
         start = time.time()
@@ -350,7 +353,10 @@ class OffsetAlignmentWorker(QObject):
         fit = self._linear_fit(times, speeds)
         if fit is None:
             return 0.0, 0.0
-        acceleration = abs(fit[0])
+        # Signed against the direction the torque was commanded in. Taking the magnitude
+        # would score a half-turn error, where the motor accelerates backwards just as
+        # hard, identically to perfect alignment, giving the metric two equal peaks.
+        acceleration = fit[0] * sign
         mean_current = sum(currents) / len(currents)
         if mean_current < 1e-3:
             return 0.0, 0.0
@@ -444,7 +450,7 @@ class OffsetAlignmentWorker(QObject):
             # score is divided by the current actually measured.
             if torque_constant <= 0:
                 torque_constant = 1.0
-            self._test_torque = 0.7 * self.current_limit * torque_constant
+            self._test_torque = 0.3 * self.current_limit * torque_constant
 
             self.progress.emit(QCoreApplication.translate(
                 "OffsetAlignmentWorker", "Checking the calibrated offset first..."), 0)
@@ -496,7 +502,7 @@ class OffsetAlignmentWorker(QObject):
                 for key, value in scores.items():
                     pooled.setdefault(key, []).append(value)
             averaged = {k: sum(v) / len(v) for k, v in pooled.items()}
-            responsive = sum(1 for v in averaged.values() if v > 0)
+            responsive = sum(1 for v in averaged.values() if math.isfinite(v) and v > 0)
             if responsive < 0.25 * len(averaged):
                 raise RuntimeError(QCoreApplication.translate(
                     "OffsetAlignmentWorker",
