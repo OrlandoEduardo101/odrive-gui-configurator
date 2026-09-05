@@ -290,6 +290,19 @@ class TuningTab(BaseTab):
 
     # --------------------------------------------------------- measurement ---
 
+    def _axis_is_armed(self):
+        """
+        Iq_measured holds its last value while the axis is disarmed, so a stale reading
+        from the previous run looks like a settled measurement. Only an armed axis is
+        actually reporting current.
+        """
+        if not self.main_window.is_connected or not self.main_window.odrv_proxy:
+            return False
+        try:
+            return self.main_window.odrv_proxy.odrv.axis0.current_state == 8
+        except Exception:
+            return False
+
     def update_live_current(self, iq_measured):
         """
         Slot fed by the main window's telemetry signal. Keeps a short rolling window
@@ -299,6 +312,13 @@ class TuningTab(BaseTab):
         emptied after every capture. Otherwise a capture taken right after changing the
         load would average in readings from the previous mass and quietly skew the fit.
         """
+        if not self._axis_is_armed():
+            self.current_samples.clear()
+            self.live_current = None
+            self.live_current_label.setText(self.tr("- (axis not in closed loop)"))
+            self.live_current_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
+            return
+
         self.current_samples.append(iq_measured)
         if len(self.current_samples) > CURRENT_SAMPLE_WINDOW:
             self.current_samples.pop(0)

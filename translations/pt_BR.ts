@@ -2248,6 +2248,10 @@ Details: {0}</source>
 
 Detalhes: {0}</translation>
     </message>
+    <message>
+        <source>- (axis not in closed loop)</source>
+        <translation>- (eixo fora da malha fechada)</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>
@@ -3291,6 +3295,14 @@ Veja &apos;Mostrar Erros&apos;: o eixo provavelmente está dando falha. Um ajust
     <message>
         <source>Fit quality R² = {0:.4f} over {1} of {2} points.</source>
         <translation>Qualidade do ajuste R² = {0:.4f} em {1} de {2} pontos.</translation>
+    </message>
+    <message>
+        <source>Only {0} of {1} speeds gave a steady reading. The motor either stayed still or never settled at the rest, so there are not enough points to fit a line through.
+
+Check &apos;Show Errors&apos;: the axis is probably faulting. A fit from this few points would report a perfect R squared while measuring nothing.</source>
+        <translation>Só {0} de {1} velocidades deram leitura estável. Nas demais o motor ou ficou parado ou nunca estabilizou, então não há pontos suficientes para ajustar uma reta.
+
+Veja &apos;Mostrar Erros&apos;: o eixo provavelmente está dando falha. Um ajuste com tão poucos pontos reportaria um R² perfeito enquanto não mede nada.</translation>
     </message>
 </context>
 <context>

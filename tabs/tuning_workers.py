@@ -343,6 +343,9 @@ class BackEmfKtWorker(QObject):
 
     # Below this the straight line is not being tested, only drawn through the points.
     MIN_USABLE_POINTS = 5
+    # Fraction of the mean speed the reading may wander during sampling before the point
+    # is treated as taken while the motor was still accelerating or hunting.
+    MAX_SPEED_SWING = 0.15
 
     def __init__(self, odrv, max_velocity, speed_count, current_limit, settle_s, sample_s):
         super().__init__()
@@ -417,6 +420,16 @@ class BackEmfKtWorker(QObject):
             return None
         pole_pairs = int(axis.motor.config.pole_pairs)
         mean_turns = sum(speeds) / len(speeds)
+
+        # The relation being fitted only holds in steady state. If the speed was still
+        # moving through the sampling window the applied voltage includes whatever the
+        # controller was doing about it, not just back-EMF, and the point is not on the
+        # line. Rejecting those is what separates a measurement from a scatter plot.
+        if abs(mean_turns) > 1e-3:
+            swing = (max(speeds) - min(speeds)) / abs(mean_turns)
+            if swing > self.MAX_SPEED_SWING:
+                return None
+
         omega_electrical = abs(mean_turns) * 2.0 * math.pi * pole_pairs
         return omega_electrical, sum(volts) / len(volts), abs(sum(currents) / len(currents))
 
@@ -504,7 +517,7 @@ class BackEmfKtWorker(QObject):
             step = (usable_velocity - lowest) / max(self.speed_count - 1, 1)
             targets = [lowest + i * step for i in range(self.speed_count)]
 
-            points = []
+            points, unsteady = [], 0
             runs = [(1.0, QCoreApplication.translate("BackEmfKtWorker", "forward")),
                     (-1.0, QCoreApplication.translate("BackEmfKtWorker", "reverse"))]
             total = len(targets) * len(runs)
@@ -516,10 +529,13 @@ class BackEmfKtWorker(QObject):
                     self.progress.emit(QCoreApplication.translate(
                         "BackEmfKtWorker", "Measuring {0:.1f} turns/s ({1})").format(target, label),
                         int(100 * done / total))
-                    measurement = self._measure_speed(target * direction)
-                    if measurement is None:
+                    if not self._is_running:
                         raise InterruptedError
-                    points.append(measurement)
+                    measurement = self._measure_speed(target * direction)
+                    if measurement is not None:
+                        points.append(measurement)
+                    else:
+                        unsteady += 1
                     done += 1
 
             axis.controller.input_vel = 0.0
@@ -533,7 +549,8 @@ class BackEmfKtWorker(QObject):
             if len(usable) < self.MIN_USABLE_POINTS:
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker",
-                    "Only {0} of {1} speeds produced motion. The motor stayed still at the rest, "
+                    "Only {0} of {1} speeds gave a steady reading. The motor either stayed still "
+                    "or never settled at the rest, "
                     "so there are not enough points to fit a line through.\n\nCheck 'Show Errors': "
                     "the axis is probably faulting. A fit from this few points would report a "
                     "perfect R squared while measuring nothing.").format(len(usable), len(points)))
