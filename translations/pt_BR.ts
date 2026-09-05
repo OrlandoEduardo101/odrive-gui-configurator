@@ -3332,6 +3332,10 @@ The velocity controller is not holding on this motor. The weight method does not
 
 O controlador de velocidade não está segurando neste motor. O método do peso não usa esse controlador e é o caminho confiável aqui.</translation>
     </message>
+    <message>
+        <source>Only {0} of {1} speeds gave a steady reading. The motor either stayed still or never settled at the rest, so there are not enough points to fit a line through.{2}</source>
+        <translation>Só {0} de {1} velocidades deram leitura estável. Nas demais o motor ou ficou parado ou nunca estabilizou, então não há pontos suficientes para ajustar uma reta.{2}</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>

@@ -373,6 +373,8 @@ class BackEmfKtWorker(QObject):
         self._speed_capped = None
         self.runaway_speed = max(self.max_velocity * 2.0, 3.0)
         self._slipped = 0
+        self._over_count = 0
+        self._last_fault = None
         self.lockin_current = current_limit * 0.6
 
     def stop(self):
@@ -469,6 +471,9 @@ class BackEmfKtWorker(QObject):
                 axis.requested_state = AXIS_STATE_IDLE
                 return None
             if axis.error != 0:
+                self._last_fault = (
+                    f"axis={hex(axis.error)} motor={hex(axis.motor.error)} "
+                    f"controller={hex(axis.controller.error)} encoder={hex(axis.encoder.error)}")
                 break
             volts.append(self._applied_voltage())
             speeds.append(abs(axis.encoder.vel_estimate))
@@ -512,7 +517,10 @@ class BackEmfKtWorker(QObject):
             # routine measures needs the motor past its test speed, so anything well
             # beyond it is a runaway and the torque comes off immediately.
             reached = abs(axis.encoder.vel_estimate)
-            if reached > self.runaway_speed:
+            # A single sample over the line is noise, most often from an encoder that is
+            # not held firmly. Only a sustained excess is a runaway.
+            self._over_count = self._over_count + 1 if reached > self.runaway_speed else 0
+            if self._over_count >= 5:
                 axis.controller.input_vel = 0.0
                 axis.requested_state = AXIS_STATE_IDLE
                 raise RuntimeError(QCoreApplication.translate(
@@ -609,11 +617,16 @@ class BackEmfKtWorker(QObject):
             # and restored afterwards. The drive reacts in its own control loop, far
             # faster than this can poll over USB.
             axis.controller.config.vel_limit = self.max_velocity * 1.3
-            try:
-                axis.controller.config.vel_limit_tolerance = 1.2
-                axis.controller.config.enable_overspeed_error = True
-            except Exception:
-                pass
+            # Only worth arming for the closed loop fallback. An open loop spin turns at
+            # the rate commanded and cannot run away, so the overspeed guard protects
+            # against nothing there while a single noisy velocity sample, which a loose
+            # encoder produces readily, trips it and takes the axis down with it.
+            if not self._lockin_available():
+                try:
+                    axis.controller.config.vel_limit_tolerance = 1.2
+                    axis.controller.config.enable_overspeed_error = True
+                except Exception:
+                    pass
             if not self._enter_closed_loop():
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The axis would not enter closed loop control."))
@@ -682,9 +695,11 @@ class BackEmfKtWorker(QObject):
                     "BackEmfKtWorker",
                     "Only {0} of {1} speeds gave a steady reading. The motor either stayed still "
                     "or never settled at the rest, "
-                    "so there are not enough points to fit a line through.\n\nCheck 'Show Errors': "
-                    "the axis is probably faulting. A fit from this few points would report a "
-                    "perfect R squared while measuring nothing.").format(len(usable), total))
+                    "so there are not enough points to fit a line through.{2}").format(
+                        len(usable), total,
+                        ("\n\nThe axis faulted during the spin: " + self._last_fault)
+                        if self._last_fault else
+                        "\n\nCheck 'Show Errors': the axis is probably faulting."))
 
             fit = self._linear_fit([w for w, _ in usable], [v for _, v in usable])
             if fit is None:
