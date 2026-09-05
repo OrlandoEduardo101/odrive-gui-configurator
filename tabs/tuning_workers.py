@@ -123,6 +123,37 @@ class CalibrationQualityWorker(QObject):
     def _spread(values):
         return max(values) - min(values) if values else 0
 
+    @staticmethod
+    def _reduce(values, period):
+        """
+        Brings raw offsets into one electrical revolution.
+
+        run_offset_calibration averages shadow_count_, which is the unwrapped encoder
+        count, so a longer scan turns further and lands the average in an entirely
+        different range. The firmware only ever uses the offset modulo one electrical
+        revolution, so that is the only part worth comparing: the raw values from two
+        different scan lengths are not comparable at all.
+        """
+        return [v % period for v in values]
+
+    @staticmethod
+    def _circular_spread(values, period):
+        """Smallest arc containing every value, so a cluster straddling the wrap is not
+        reported as if it spanned the whole revolution."""
+        if len(values) < 2:
+            return 0.0
+        ordered = sorted(values)
+        gaps = [(ordered[(i + 1) % len(ordered)] - ordered[i]) % period
+                for i in range(len(ordered))]
+        return period - max(gaps)
+
+    @staticmethod
+    def _circular_mean(values, period):
+        angles = [2.0 * math.pi * v / period for v in values]
+        mean = math.atan2(sum(math.sin(a) for a in angles) / len(angles),
+                          sum(math.cos(a) for a in angles) / len(angles))
+        return (mean * period / (2.0 * math.pi)) % period
+
     # -------------------------------------------------------------------- run ---
 
     def run(self):
@@ -181,28 +212,34 @@ class CalibrationQualityWorker(QObject):
             if after is None:
                 raise InterruptedError
 
-            spread_before, spread_after = self._spread(before), self._spread(after)
+            period = counts_per_electrical_rev
+            before_reduced = self._reduce(before, period)
+            after_reduced = self._reduce(after, period)
+            spread_before = self._circular_spread(before_reduced, period)
+            spread_after = self._circular_spread(after_reduced, period)
             lines = [
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "As configured: scan of {0:.2f} mechanical revolutions").format(current_revolutions),
                 QCoreApplication.translate("CalibrationQualityWorker",
-                    "  offsets {0}").format(", ".join(str(v) for v in before)),
+                    "  offsets {0}").format(", ".join(str(round(v)) for v in before_reduced)),
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "  spread {0} counts = {1:.2f} electrical degrees").format(
-                        spread_before, to_degrees(spread_before)),
+                        round(spread_before), to_degrees(spread_before)),
                 "",
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "Over {0:.0f} whole revolutions, at {1:.1f} A").format(
                         self.mechanical_revolutions, self.calibration_current),
                 QCoreApplication.translate("CalibrationQualityWorker",
-                    "  offsets {0}").format(", ".join(str(v) for v in after)),
+                    "  offsets {0}").format(", ".join(str(round(v)) for v in after_reduced)),
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "  spread {0} counts = {1:.2f} electrical degrees").format(
-                        spread_after, to_degrees(spread_after)),
+                        round(spread_after), to_degrees(spread_after)),
                 "",
             ]
 
-            gap = abs(sum(after) / len(after) - sum(before) / len(before))
+            mean_before = self._circular_mean(before_reduced, period)
+            mean_after = self._circular_mean(after_reduced, period)
+            gap = abs((mean_after - mean_before + period / 2) % period - period / 2)
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
                 "The two settings land {0:.2f} electrical degrees apart on average.").format(to_degrees(gap)))
 
