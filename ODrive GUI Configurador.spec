@@ -1,4 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+
+# Every module under tabs/, listed from the filesystem rather than by importing the
+# package: collect_submodules imports it, and if any dependency is missing at build
+# time it returns nothing and only warns. Listing them by hand meant a new tab could be
+# bundled while the worker it imports was left out, which fails only at runtime, in the
+# built executable, with a ModuleNotFoundError.
+tabs_modules = ['tabs.' + name[:-3] for name in sorted(os.listdir('tabs'))
+                if name.endswith('.py') and name != '__init__.py']
 
 
 a = Analysis(
@@ -6,7 +15,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('./assets', 'assets'), ('./licenses', 'licenses'), ('./translations', 'translations')],
-    hiddenimports=['win32console', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'pyqtgraph', 'shiboken6', 'odrive.fibre'],
+    hiddenimports=['win32console', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'pyqtgraph', 'shiboken6', 'odrive.fibre'] + tabs_modules,
     hookspath=['./hooks'],
     hooksconfig={},
     runtime_hooks=[],
