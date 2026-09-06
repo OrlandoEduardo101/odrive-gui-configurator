@@ -1844,6 +1844,50 @@ Detalhes: {0}</translation>
         <source>&lt;b&gt;WARNING:&lt;/b&gt; You are about to erase &lt;b&gt;ALL&lt;/b&gt; settings on the ODrive and restore them to factory defaults.&lt;br&gt;&lt;br&gt;This action is irreversible and requires a reboot upon completion.&lt;br&gt;&lt;br&gt;Do you wish to continue?</source>
         <translation>&lt;b&gt;AVISO:&lt;/b&gt; Você está prestes a apagar &lt;b&gt;TODAS&lt;/b&gt; as configurações do ODrive e restaurá-las para os padrões de fábrica.&lt;br&gt;&lt;br&gt;Esta ação é irreversível e requer uma reinicialização após a conclusão.&lt;br&gt;&lt;br&gt;Deseja continuar?</translation>
     </message>
+    <message>
+        <source>Enter CLOSED LOOP (Axis 0)</source>
+        <translation>Entrar em MALHA FECHADA (Eixo 0)</translation>
+    </message>
+    <message>
+        <source>Puts Axis 0 in CLOSED_LOOP_CONTROL. Requires a calibrated motor and a ready encoder.</source>
+        <translation>Coloca o Eixo 0 em CONTROLE EM MALHA FECHADA. Requer motor calibrado e encoder pronto.</translation>
+    </message>
+    <message>
+        <source>Puts Axis 0 in IDLE state. Required to save configuration, and aborts an ongoing calibration.</source>
+        <translation>Coloca o Eixo 0 em estado OCIOSO. Necessário para salvar a configuração, e aborta uma calibração em andamento.</translation>
+    </message>
+    <message>
+        <source>The motor is not calibrated.
+
+Run the motor calibration on the &apos;Motor&apos; tab before entering closed loop.</source>
+        <translation>O motor não está calibrado.
+
+Execute a calibração do motor na aba &apos;Motor&apos; antes de entrar em malha fechada.</translation>
+    </message>
+    <message>
+        <source>The encoder is not ready.
+
+Run the encoder calibration on the &apos;Encoder&apos; tab before entering closed loop.</source>
+        <translation>O encoder não está pronto.
+
+Execute a calibração do encoder na aba &apos;Encoder&apos; antes de entrar em malha fechada.</translation>
+    </message>
+    <message>
+        <source>Axis 0 is in CLOSED LOOP CONTROL.</source>
+        <translation>Eixo 0 em CONTROLE EM MALHA FECHADA.</translation>
+    </message>
+    <message>
+        <source>Axis 0 did not stay in closed loop. Click &apos;Show Errors&apos; for details.</source>
+        <translation>O Eixo 0 não permaneceu em malha fechada. Clique em &apos;Mostrar Erros&apos; para detalhes.</translation>
+    </message>
+    <message>
+        <source>Could not read the axis state.
+
+Details: {0}</source>
+        <translation>Não foi possível ler o estado do eixo.
+
+Detalhes: {0}</translation>
+    </message>
 </context>
 <context>
     <name>TerminalTab</name>
