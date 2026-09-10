@@ -168,3 +168,13 @@ Assista à demonstração completa do **ODrive GUI Configurator** no YouTube:
 ## 📄 Licença
 Este projeto utiliza bibliotecas de terceiros. Consulte [licenses](LICENSES) para mais detalhes. O código é **aberto** e está disponível neste repositório para estudo, modificação e contribuições da comunidade.  
 
+---
+
+## Ferramentas para Direct Drive / OpenFFBoard
+
+Este fork adiciona uma aba **Ajustes** com medição de Kt, verificação de calibração,
+limites térmicos e um preset para OpenFFBoard, além de download automático do firmware
+correto.
+
+- [Funcionalidades, com imagens](docs/FUNCIONALIDADES.md)
+- [Guia de ajuste passo a passo](docs/GUIA-AJUSTE-FFB.md)

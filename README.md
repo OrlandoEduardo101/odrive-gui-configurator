@@ -182,3 +182,14 @@ Watch the full demonstration of **ODrive GUI Configurator** on YouTube:
 
 ## 📄 License
 This project uses third-party libraries. See [licenses](LICENSES) for details.
+
+---
+
+## Direct drive / OpenFFBoard tools
+
+This fork adds a **Tuning** tab with Kt measurement, a calibration repeatability check,
+thermal limits and an OpenFFBoard preset, plus automatic download of the matching
+firmware.
+
+- [Features, with screenshots](docs/FUNCIONALIDADES.md) (Portuguese)
+- [Step by step tuning guide](docs/GUIA-AJUSTE-FFB.md) (Portuguese)

@@ -8,3 +8,8 @@ from .graph_tab import GraphTab
 from .firmware_tab import FirmwareTab
 from .workers import ODriveWorker
 from .backup_tab import BackupTab
+from .tuning_tab import TuningTab
+from .alignment_tab import AlignmentTab
+from .safety_tab import SafetyTab
+from .preset_tab import PresetTab
+from .tuning_container import TuningContainer

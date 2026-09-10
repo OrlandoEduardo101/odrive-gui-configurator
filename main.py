@@ -29,7 +29,7 @@ from ansi2html import Ansi2HTMLConverter
 import fibre
 
 # --- Local Imports ---
-from tabs import DCTab, MotorTab, CANTab, EncoderTab, TerminalTab, GraphTab, ODriveWorker, FirmwareTab, BackupTab
+from tabs import DCTab, MotorTab, CANTab, EncoderTab, TerminalTab, GraphTab, ODriveWorker, FirmwareTab, BackupTab, TuningContainer
 from app_config import AppColors, AppMessages, AppConstants
 
 def resource_path(relative_path):
@@ -263,8 +263,9 @@ class ODriveGUI(QMainWindow):
         self.graph_tab = GraphTab(self); self.tabs.addTab(self.graph_tab, "")
         self.terminal_tab = TerminalTab(self); self.tabs.addTab(self.terminal_tab, "")
         self.backup_tab = BackupTab(self); self.tabs.addTab(self.backup_tab, "")
+        self.tuning_tab = TuningContainer(self); self.tabs.addTab(self.tuning_tab, "")
         self.about_tab_placeholder = QWidget(); self.tabs.addTab(self.about_tab_placeholder, "")
-        self.config_tabs = [self.dc_tab, self.motor_tab, self.can_tab, self.encoder_tab, self.firmware_tab]
+        self.config_tabs = [self.dc_tab, self.motor_tab, self.can_tab, self.encoder_tab, self.firmware_tab, self.tuning_tab]
         main_layout.addLayout(top_layout)
         main_layout.addWidget(self.tabs)
         self.setStatusBar(QStatusBar())
@@ -309,7 +310,7 @@ class ODriveGUI(QMainWindow):
         self.tabs.setTabText(2, self.tr("Encoder")); self.tabs.setTabText(3, self.tr("CAN"))
         self.tabs.setTabText(4, self.tr("Firmware")); self.tabs.setTabText(5, self.tr("Graph"))
         self.tabs.setTabText(6, self.tr("Terminal")); self.tabs.setTabText(7, self.tr("Backup"))
-        self.tabs.setTabText(8, self.tr("About"))
+        self.tabs.setTabText(8, self.tr("Tuning")); self.tabs.setTabText(9, self.tr("About"))
         self.show_status_message(self.tr("Ready."))
         settings = QSettings()
         current_locale = settings.value('language', 'en_US')
@@ -326,6 +327,7 @@ class ODriveGUI(QMainWindow):
         if hasattr(self, 'graph_tab'): self.graph_tab.retranslate_ui()
         if hasattr(self, 'terminal_tab'): self.terminal_tab.retranslate_ui()
         if hasattr(self, 'backup_tab'): self.backup_tab.retranslate_ui()
+        if hasattr(self, 'tuning_tab'): self.tuning_tab.retranslate_ui()
         
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -431,6 +433,8 @@ class ODriveGUI(QMainWindow):
         self.odrv_worker.telemetry_updated.connect(self.graph_tab.update_plot)
         self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.encoder_tab.update_calibration_status(er))
         self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.motor_tab.update_motor_calibration_status(mc))
+        self.odrv_worker.telemetry_updated.connect(lambda p,v,vb,cl,cs,ps,im,er,mc: self.tuning_tab.update_live_current(im))
+        self.odrv_worker.extended_telemetry.connect(self.tuning_tab.update_extended_telemetry)
         self.odrv_worker.finished.connect(self.odrv_thread.quit)
         self.odrv_worker.finished.connect(self.odrv_worker.deleteLater)
         self.odrv_thread.finished.connect(self.odrv_thread.deleteLater)
@@ -494,6 +498,7 @@ class ODriveGUI(QMainWindow):
         self.current_state_label.setText(self.tr("Current State: -")); self.graph_tab.clear_plot()
         self.last_telemetry_data = None
         self.current_axis_state = None; self._update_axis_state_button()
+        if hasattr(self, 'tuning_tab'): self.tuning_tab.reset_live_readings()
         
     def disconnect_odrive(self):
         if not self.is_connected or not self.odrv_worker: return

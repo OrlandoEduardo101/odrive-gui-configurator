@@ -24,6 +24,9 @@ class ODriveWorker(QObject):
     """
     connection_status = Signal(bool, str)
     telemetry_updated = Signal(float, float, float, float, int, float, float, bool, bool)
+    # Carries the optional readings (temperatures, bus current) as a dict, on its own
+    # channel so that telemetry_updated above keeps its original shape and consumers.
+    extended_telemetry = Signal(object)
     error_detected = Signal(str)
     finished = Signal()
 
@@ -50,10 +53,11 @@ class ODriveWorker(QObject):
                         self.error_detected.emit(f"ERROR: {hex(axis.error)}")
                     
                     self.telemetry_updated.emit(
-                        axis.encoder.pos_estimate, axis.encoder.vel_estimate, self.odrv.vbus_voltage, 
-                        axis.motor.config.current_lim, axis.current_state, axis.controller.input_pos, 
+                        axis.encoder.pos_estimate, axis.encoder.vel_estimate, self.odrv.vbus_voltage,
+                        axis.motor.config.current_lim, axis.current_state, axis.controller.input_pos,
                         axis.motor.current_control.Iq_measured, axis.encoder.is_ready, axis.motor.is_calibrated
                     )
+                    self.extended_telemetry.emit(self._read_optional_telemetry(axis))
                 except fibre.protocol.ChannelBrokenException:
                     self.connection_status.emit(False, AppMessages.ODRIVE_CONNECTION_LOST)
                     self._is_running = False 
@@ -78,6 +82,31 @@ class ODriveWorker(QObject):
                 self.odrv = None
             self.finished.emit()
             print("Worker resources cleaned up.") # Console message
+
+    @staticmethod
+    def _read_optional_telemetry(axis):
+        """
+        Collects readings that only some boards or firmware versions expose, such as
+        the thermistors. Each one is probed individually so that a board without a
+        motor thermistor still reports its FET temperature. Missing values are simply
+        absent from the dict rather than being reported as zero, which would look like
+        a real reading of a cold motor.
+        """
+        readings = {}
+        probes = {
+            'fet_temp': lambda: axis.motor.fet_thermistor.temperature,
+            'motor_temp': lambda: axis.motor.motor_thermistor.temperature,
+            'ibus': lambda: axis.motor.current_control.Ibus,
+            'id_measured': lambda: axis.motor.current_control.Id_measured,
+        }
+        for key, probe in probes.items():
+            try:
+                value = probe()
+            except Exception:
+                continue
+            if value is not None:
+                readings[key] = value
+        return readings
 
     def stop(self):
         """Signals the main loop to stop safely."""
