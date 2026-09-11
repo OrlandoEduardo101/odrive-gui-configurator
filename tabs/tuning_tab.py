@@ -23,10 +23,10 @@ import math
 from PySide6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QComboBox, QDoubleSpinBox, QSpinBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QAbstractItemView, QProgressBar
+    QHeaderView, QMessageBox, QAbstractItemView, QProgressBar, QApplication
 )
 from PySide6.QtGui import QDoubleValidator
-from PySide6.QtCore import Qt, QEvent, QThread
+from PySide6.QtCore import Qt, QEvent, QThread, QTimer
 
 from .base_tab import BaseTab
 from .tuning_workers import BackEmfKtWorker, SaturationSweepWorker
@@ -156,8 +156,10 @@ class TuningTab(BaseTab):
         result_layout = QVBoxLayout(self.result_group)
         self.result_label = QLabel()
         self.result_label.setWordWrap(True)
+        self.result_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.quality_label = QLabel()
         self.quality_label.setWordWrap(True)
+        self.quality_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.configured_label = QLabel()
         result_layout.addWidget(self.result_label)
         result_layout.addWidget(self.quality_label)
@@ -219,8 +221,10 @@ class TuningTab(BaseTab):
         self.auto_progress.setRange(0, 100)
         self.auto_result_label = QLabel()
         self.auto_result_label.setWordWrap(True)
+        self.auto_result_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.compare_label = QLabel()
         self.compare_label.setWordWrap(True)
+        self.compare_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         auto_layout.addWidget(self.auto_progress)
         auto_layout.addWidget(self.auto_result_label)
         auto_layout.addWidget(self.compare_label)
@@ -265,8 +269,16 @@ class TuningTab(BaseTab):
         self.sat_progress = QProgressBar(); self.sat_progress.setRange(0, 100)
         self.sat_progress.setVisible(False)
         self.sat_result = QLabel(); self.sat_result.setWordWrap(True)
+        self.sat_result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         sat_layout.addWidget(self.sat_progress)
         sat_layout.addWidget(self.sat_result)
+
+        copy_row = QHBoxLayout()
+        copy_row.addStretch()
+        self.copy_report_btn = QPushButton()
+        self.copy_report_btn.clicked.connect(self.copy_report)
+        copy_row.addWidget(self.copy_report_btn)
+        main_layout.addLayout(copy_row)
 
         main_layout.addWidget(self.setup_group)
         main_layout.addWidget(self.capture_group)
@@ -277,6 +289,10 @@ class TuningTab(BaseTab):
 
     def retranslate_ui(self):
         """Updates all translatable texts in this tab."""
+        self.copy_report_btn.setText(self.tr("Copy Report"))
+        self.copy_report_btn.setToolTip(self.tr(
+            "Copies the results together with the drive settings they depend on, "
+            "so the numbers can be read without a screenshot."))
         self.setup_group.setTitle(self.tr("Measurement Setup"))
         self.label_method.setText(self.tr("Method:"))
         self.label_radius.setText(self.tr("Radius / Arm length (mm):"))
@@ -689,6 +705,93 @@ class TuningTab(BaseTab):
         if not self.backemf_kt:
             return
         self._write_torque_constant(self.backemf_kt)
+
+    # ------------------------------------------------------------- copy report ---
+
+    # Each probe is separate because firmware versions differ in what they expose, and a
+    # board without a motor thermistor should still report everything else. A missing
+    # reading is left out rather than written as zero, which would read as a real value.
+    REPORT_FIELDS = [
+        ("Firmware", lambda d: "{}.{}.{}".format(d.fw_version_major, d.fw_version_minor,
+                                                 d.fw_version_revision)),
+        ("Hardware", lambda d: "v{}.{}-{}V".format(d.hw_version_major, d.hw_version_minor,
+                                                   d.hw_version_variant)),
+        ("Bus voltage", lambda d: "{:.2f} V".format(d.vbus_voltage)),
+        ("Pole pairs", lambda d: "{}".format(d.axis0.motor.config.pole_pairs)),
+        ("Phase resistance", lambda d: "{:.4f} ohm".format(d.axis0.motor.config.phase_resistance)),
+        ("Phase inductance", lambda d: "{:.2f} uH".format(d.axis0.motor.config.phase_inductance * 1e6)),
+        ("Torque constant", lambda d: "{:.4f} Nm/A".format(d.axis0.motor.config.torque_constant)),
+        ("Current limit", lambda d: "{:.1f} A".format(d.axis0.motor.config.current_lim)),
+        ("Calibration current", lambda d: "{:.1f} A".format(d.axis0.motor.config.calibration_current)),
+        ("Encoder CPR", lambda d: "{}".format(d.axis0.encoder.config.cpr)),
+        ("Encoder ready", lambda d: "{}".format(bool(d.axis0.encoder.is_ready))),
+        ("Motor calibrated", lambda d: "{}".format(bool(d.axis0.motor.is_calibrated))),
+        ("FET temperature", lambda d: "{:.1f} C".format(d.axis0.motor.fet_thermistor.temperature)),
+        ("Motor temperature", lambda d: "{:.1f} C".format(d.axis0.motor.motor_thermistor.temperature)),
+        ("Axis error", lambda d: hex(d.axis0.error)),
+        ("Motor error", lambda d: hex(d.axis0.motor.error)),
+        ("Encoder error", lambda d: hex(d.axis0.encoder.error)),
+        ("Controller error", lambda d: hex(d.axis0.controller.error)),
+    ]
+
+    def copy_report(self):
+        """
+        Puts the results on the clipboard along with the drive settings behind them.
+
+        A screenshot loses the text and carries none of the configuration, yet almost
+        every question about a result ("why is this Kt low", "why did that current fail")
+        is answered by the bus voltage and the phase resistance rather than by the
+        result itself. Copying both together means the numbers arrive readable and with
+        the context needed to interpret them.
+        """
+        lines = [self.tr("ODrive tuning report"), ""]
+
+        odrv = self.get_odrv()
+        if odrv:
+            lines.append(self.tr("Drive:"))
+            for label, probe in self.REPORT_FIELDS:
+                try:
+                    lines.append("  {}: {}".format(label, probe(odrv)))
+                except Exception:
+                    continue
+            lines.append("")
+        else:
+            lines.append(self.tr("Drive: not connected, so no settings are included."))
+            lines.append("")
+
+        # The weight method's label holds setup guidance until points are captured, so
+        # it is only a result once there are points behind it.
+        sections = [
+            (self.tr("Weight method"), [self.result_label, self.quality_label],
+             self.points_table.rowCount() > 0),
+            (self.tr("Back-EMF method"), [self.auto_result_label, self.compare_label], True),
+            (self.tr("Saturation sweep"), [self.sat_result], True),
+        ]
+        for title, widgets, include in sections:
+            body = [w.text().strip() for w in widgets if w.text().strip()]
+            if not body or not include:
+                continue
+            lines.append(title + ":")
+            for chunk in body:
+                # Blank separators keep their break but not the indent, which would
+                # otherwise be invisible trailing whitespace when pasted.
+                lines.extend(("  " + line) if line.strip() else "" for line in chunk.splitlines())
+            lines.append("")
+
+        if self.points_table.rowCount():
+            lines.append(self.tr("Captured points:"))
+            for row in range(self.points_table.rowCount()):
+                cells = []
+                for column in range(self.points_table.columnCount()):
+                    item = self.points_table.item(row, column)
+                    cells.append(item.text() if item else "")
+                lines.append("  " + "\t".join(cells))
+            lines.append("")
+
+        text = "\n".join(lines).rstrip() + "\n"
+        QApplication.clipboard().setText(text)
+        self.copy_report_btn.setText(self.tr("Copied"))
+        QTimer.singleShot(1500, lambda: self.copy_report_btn.setText(self.tr("Copy Report")))
 
     # ------------------------------------------------- saturation / real peak ---
 

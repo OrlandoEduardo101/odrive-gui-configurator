@@ -2320,6 +2320,46 @@ Is the shaft free, and is the motor cool?</source>
 
 O eixo está livre e o motor está frio?</translation>
     </message>
+    <message>
+        <source>Copy Report</source>
+        <translation>Copiar Relatório</translation>
+    </message>
+    <message>
+        <source>Copied</source>
+        <translation>Copiado</translation>
+    </message>
+    <message>
+        <source>Copies the results together with the drive settings they depend on, so the numbers can be read without a screenshot.</source>
+        <translation>Copia os resultados junto com as configurações da placa de que eles dependem, para os números serem lidos sem screenshot.</translation>
+    </message>
+    <message>
+        <source>ODrive tuning report</source>
+        <translation>Relatório de ajuste da ODrive</translation>
+    </message>
+    <message>
+        <source>Drive:</source>
+        <translation>Placa:</translation>
+    </message>
+    <message>
+        <source>Drive: not connected, so no settings are included.</source>
+        <translation>Placa: não conectada, então nenhuma configuração foi incluída.</translation>
+    </message>
+    <message>
+        <source>Weight method</source>
+        <translation>Método do peso</translation>
+    </message>
+    <message>
+        <source>Back-EMF method</source>
+        <translation>Método da força contraeletromotriz</translation>
+    </message>
+    <message>
+        <source>Saturation sweep</source>
+        <translation>Varredura de saturação</translation>
+    </message>
+    <message>
+        <source>Captured points:</source>
+        <translation>Pontos capturados:</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>
