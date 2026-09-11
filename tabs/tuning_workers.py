@@ -1136,6 +1136,33 @@ class SaturationSweepWorker(QObject):
                         "clipping it will shrink; if it is the iron it will not, since "
                         "saturation does not care how fast the measurement spins."))
 
+            # Every error left in this measurement scales with the test current: the
+            # reactive term removed with a phase_inductance that is itself only a
+            # calibration, and whatever voltage the drive loses to dead time. Fitting Kt
+            # against current and reading the line at zero therefore cancels all of them
+            # at once, without needing to know which one dominates. Hardware showed the
+            # size of it: 0.4051 at 5 A and 0.3809 at 6.2 A for the same motor, about
+            # 1.2% per amp, against an extrapolated 0.4116.
+            clean = [(c, kt) for c, kt in points if kt / baseline >= 1.0 - self.SIGNIFICANT_DROP]
+            unloaded = BackEmfKtWorker._linear_fit(
+                [c for c, _ in clean], [kt for _, kt in clean]) if len(clean) >= 2 else None
+            if unloaded is not None:
+                slope, kt_zero, _, _ = unloaded
+                # Extrapolating backwards is only honest over a short reach, and only
+                # when the trend is real rather than two noisy points sharing a line.
+                if kt_zero > 0 and abs(kt_zero / baseline - 1.0) < 0.25:
+                    lines.append("")
+                    lines.append(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "Unloaded Kt, extrapolated to zero current: {0:.4f} Nm/A.").format(kt_zero))
+                    lines.append(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "Use this one for torque_constant. What is left of the measurement error "
+                        "grows with the test current, so reading the trend back to zero cancels "
+                        "it whatever its cause, which a single measurement at one current cannot "
+                        "do. It changes by {0:.3f} per amp across the levels measured.")
+                        .format(abs(slope)))
+
             lines.append("")
             lines.append(QCoreApplication.translate(
                 "SaturationSweepWorker",

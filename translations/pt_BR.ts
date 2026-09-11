@@ -3753,5 +3753,13 @@ As configurações originais foram restauradas.</translation>
         <source>Treat this carefully: the sweep ended because the drive ran out of voltage, and the same shortage biases the last points downward. To tell the two apart, halve the top speed and run it again. If the fall is clipping it will shrink; if it is the iron it will not, since saturation does not care how fast the measurement spins.</source>
         <translation>Cuidado com esta leitura: a varredura terminou porque a placa ficou sem tensão, e essa mesma falta puxa os últimos pontos para baixo. Para separar as duas causas, reduza a velocidade máxima pela metade e rode de novo. Se a queda for grampeamento ela diminui; se for o ferro ela permanece, já que saturação não depende da velocidade da medição.</translation>
     </message>
+    <message>
+        <source>Unloaded Kt, extrapolated to zero current: {0:.4f} Nm/A.</source>
+        <translation>Kt sem carga, extrapolado para corrente zero: {0:.4f} Nm/A.</translation>
+    </message>
+    <message>
+        <source>Use this one for torque_constant. What is left of the measurement error grows with the test current, so reading the trend back to zero cancels it whatever its cause, which a single measurement at one current cannot do. It changes by {0:.3f} per amp across the levels measured.</source>
+        <translation>Use este no torque_constant. O que resta de erro de medição cresce com a corrente de teste, então ler a tendência de volta até zero cancela esse erro seja qual for a causa, o que uma medição única numa só corrente não consegue fazer. Ele varia {0:.3f} por ampère ao longo dos níveis medidos.</translation>
+    </message>
 </context>
 </TS>
