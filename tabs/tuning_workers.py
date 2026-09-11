@@ -26,6 +26,27 @@ from odrive.enums import CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH
 from odrive.enums import AXIS_STATE_LOCKIN_SPIN
 
 
+
+# The largest voltage vector the drive can produce, verified in fw-v0.5.6 foc.cpp:
+#
+#     float mod_to_V = (2.0f / 3.0f) * vbus_voltage;
+#     float mod_scalefactor = 0.80f * sqrt3_by_2 / sqrt(mod_d*mod_d + mod_q*mod_q);
+#     if (mod_scalefactor < 1.0f) { mod_d *= ...; mod_q *= ...; }
+#
+# so the modulation magnitude is held at 0.8 * sqrt(3)/2 and the voltage ceiling is
+# that fraction of (2/3) * vbus, about 0.46 * vbus rather than the 0.67 * vbus that
+# mod_to_V alone suggests. Using the larger figure asks for speeds the drive cannot
+# reach: the applied voltage stops tracking speed, the fitted slope flattens, and Kt
+# comes back progressively lower as current rises. That reads exactly like magnetic
+# saturation while being nothing but a clipped measurement.
+MODULATION_LIMIT = 0.8 * (3.0 ** 0.5) / 2.0
+
+
+def modulator_ceiling(vbus_voltage):
+    """Peak phase voltage amplitude the modulator can deliver, in volts."""
+    return MODULATION_LIMIT * (2.0 / 3.0) * float(vbus_voltage)
+
+
 class CalibrationQualityWorker(QObject):
     """
     Measures how repeatable ODrive's own encoder offset calibration is, and whether
@@ -535,8 +556,7 @@ class BackEmfKtWorker(QObject):
         # it is what produces a negative slope.
         mean_volts = sum(volts) / len(volts)
         try:
-            modulator_limit = (2.0 / 3.0) * float(self.odrv.vbus_voltage)
-            if mean_volts > 0.97 * modulator_limit:
+            if mean_volts > 0.97 * modulator_ceiling(self.odrv.vbus_voltage):
                 self._saturated += 1
                 return None
         except Exception:
@@ -730,7 +750,7 @@ class BackEmfKtWorker(QObject):
                 # half the bus. Ignoring it let the sweep ask for speeds the drive could
                 # not reach, where the applied voltage stops rising and the fitted slope
                 # is noise, sometimes negative.
-                modulator_volts = (2.0 / 3.0) * float(self.odrv.vbus_voltage)
+                modulator_volts = modulator_ceiling(self.odrv.vbus_voltage)
                 # phase_resistance was measured on a cold motor. Copper gains about
                 # 0.4% per degree, so after a few minutes of sweeping the real drop is
                 # well above it and the headroom is smaller than this predicts. When an
