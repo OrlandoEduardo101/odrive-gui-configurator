@@ -1057,7 +1057,7 @@ class SaturationSweepWorker(QObject):
             for current, kt in points:
                 change = (kt / baseline - 1.0) * 100.0
                 lines.append(QCoreApplication.translate(
-                    "SaturationSweepWorker", "  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   peak {3:.1f} Nm")
+                    "SaturationSweepWorker", "  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   torque {3:.1f} Nm")
                     .format(current, kt, change, kt * current))
             lines.append("")
 
@@ -1108,9 +1108,33 @@ class SaturationSweepWorker(QObject):
                     lines.append("")
                     lines.append(QCoreApplication.translate(
                         "SaturationSweepWorker",
-                        "It starts around {0:.1f} A, so real peak torque is about {1:.1f} Nm rather "
-                        "than the {2:.1f} Nm that multiplying the unloaded Kt would suggest.")
-                        .format(knee, usable * knee, baseline * knee))
+                        "It starts around {0:.1f} A. At that current the motor makes {1:.1f} Nm "
+                        "rather than the {2:.1f} Nm that multiplying the unloaded Kt would "
+                        "suggest.").format(knee, usable * knee, baseline * knee))
+                    lines.append("")
+                    # The sweep only knows the currents it measured. Calling the torque at
+                    # the top of a truncated range the motor's peak invites setting
+                    # current_lim from a number that was never tested: a run that stopped
+                    # at 14.5 A reported 5.3 Nm as the real peak for a motor that pulls
+                    # 10 Nm on a scale.
+                    lines.append(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "This says nothing about currents above {0:.1f} A, which were not "
+                        "measured. It is not the motor's peak torque.").format(points[-1][0]))
+                if stopped_at:
+                    # The sweep stops when the drive runs out of voltage, and that same
+                    # shortage flattens the fitted slope at the currents just below it. A
+                    # fall measured right at that edge is therefore not safe to read as
+                    # saturation, and the two causes separate cleanly by speed: clipping
+                    # depends on how fast the measurement spins, the iron does not.
+                    lines.append("")
+                    lines.append(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "Treat this carefully: the sweep ended because the drive ran out of "
+                        "voltage, and the same shortage biases the last points downward. To tell "
+                        "the two apart, halve the top speed and run it again. If the fall is "
+                        "clipping it will shrink; if it is the iron it will not, since "
+                        "saturation does not care how fast the measurement spins."))
 
             lines.append("")
             lines.append(QCoreApplication.translate(

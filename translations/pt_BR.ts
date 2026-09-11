@@ -3737,5 +3737,21 @@ As configurações originais foram restauradas.</translation>
         <source>The usual cause is the reactive voltage: the drive reports the magnitude of the voltage vector, which carries an omega times L times I term that grows with the test current. Check that phase_inductance is calibrated.</source>
         <translation>A causa usual é a tensão reativa: a placa reporta o módulo do vetor de tensão, que carrega um termo ômega vezes L vezes I e cresce com a corrente de teste. Confira se a phase_inductance está calibrada.</translation>
     </message>
+    <message>
+        <source>  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   torque {3:.1f} Nm</source>
+        <translation>  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   torque {3:.1f} Nm</translation>
+    </message>
+    <message>
+        <source>It starts around {0:.1f} A. At that current the motor makes {1:.1f} Nm rather than the {2:.1f} Nm that multiplying the unloaded Kt would suggest.</source>
+        <translation>Começa por volta de {0:.1f} A. Nessa corrente o motor faz {1:.1f} Nm em vez dos {2:.1f} Nm que multiplicar o Kt sem carga sugeriria.</translation>
+    </message>
+    <message>
+        <source>This says nothing about currents above {0:.1f} A, which were not measured. It is not the motor&apos;s peak torque.</source>
+        <translation>Isto não diz nada sobre correntes acima de {0:.1f} A, que não foram medidas. Não é o torque de pico do motor.</translation>
+    </message>
+    <message>
+        <source>Treat this carefully: the sweep ended because the drive ran out of voltage, and the same shortage biases the last points downward. To tell the two apart, halve the top speed and run it again. If the fall is clipping it will shrink; if it is the iron it will not, since saturation does not care how fast the measurement spins.</source>
+        <translation>Cuidado com esta leitura: a varredura terminou porque a placa ficou sem tensão, e essa mesma falta puxa os últimos pontos para baixo. Para separar as duas causas, reduza a velocidade máxima pela metade e rode de novo. Se a queda for grampeamento ela diminui; se for o ferro ela permanece, já que saturação não depende da velocidade da medição.</translation>
+    </message>
 </context>
 </TS>
