@@ -3761,5 +3761,13 @@ As configurações originais foram restauradas.</translation>
         <source>Use this one for torque_constant. What is left of the measurement error grows with the test current, so reading the trend back to zero cancels it whatever its cause, which a single measurement at one current cannot do. It changes by {0:.3f} per amp across the levels measured.</source>
         <translation>Use este no torque_constant. O que resta de erro de medição cresce com a corrente de teste, então ler a tendência de volta até zero cancela esse erro seja qual for a causa, o que uma medição única numa só corrente não consegue fazer. Ele varia {0:.3f} por ampère ao longo dos níveis medidos.</translation>
     </message>
+    <message>
+        <source>These points do not form a trend: Kt spans {0:.1f}% and moves both ways across the range. Saturation is monotone, so nothing here can be read as a property of the motor.</source>
+        <translation>Estes pontos não formam uma tendência: o Kt varia {0:.1f}% e se move nos dois sentidos ao longo da faixa. Saturação é monotônica, então nada aqui pode ser lido como propriedade do motor.</translation>
+    </message>
+    <message>
+        <source>The measurement is not repeating well enough to compare levels. The motor warming between them moves the magnets, and levels near the voltage limit are biased low. Let it cool, keep the top current well away from where the sweep fails, and prefer a single measurement at low current.</source>
+        <translation>A medição não está repetindo bem o suficiente para comparar níveis. O motor aquecendo entre eles altera os ímãs, e níveis perto do limite de tensão saem enviesados para baixo. Deixe esfriar, mantenha a corrente máxima bem longe de onde a varredura falha, e prefira uma medição única em corrente baixa.</translation>
+    </message>
 </context>
 </TS>

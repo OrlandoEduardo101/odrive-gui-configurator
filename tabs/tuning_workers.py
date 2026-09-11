@@ -1002,6 +1002,34 @@ class SaturationSweepWorker(QObject):
         if self._child:
             self._child.stop()
 
+
+    def _classify(self, points, baseline):
+        """
+        Names the shape of Kt against current: flat, falling, rising or scattered.
+
+        Saturation is monotone. It can only take torque away, and once the iron starts
+        to give up it does not recover at higher current. So a sequence that dips and
+        then climbs is not the motor, it is the measurement failing to repeat, and no
+        verdict drawn from it means anything. Hardware produced 0.3724, 0.3579, 0.4011
+        across 6 to 15 A, and reading only the lowest point reported saturation starting
+        at 10.5 A from what was 12% of scatter.
+
+        Tolerance is one noise band, so a step within measurement error does not break a
+        trend that is otherwise clean.
+        """
+        values = [kt for _, kt in points]
+        tolerance = self.SIGNIFICANT_DROP * baseline
+        spread = max(values) - min(values)
+        falling = all(b <= a + tolerance for a, b in zip(values, values[1:]))
+        rising = all(b >= a - tolerance for a, b in zip(values, values[1:]))
+        if spread <= tolerance:
+            return 'flat'
+        if falling:
+            return 'falling'
+        if rising:
+            return 'rising'
+        return 'scattered'
+
     def run(self):
         points, stopped_at, hot_ohms = [], None, None
         try:
@@ -1070,7 +1098,21 @@ class SaturationSweepWorker(QObject):
             # report. The spread is what the reader can see, so the spread is what gets
             # named.
             spread = (best[1] - worst[1]) / baseline
-            if drop < self.SIGNIFICANT_DROP and rise >= self.SIGNIFICANT_DROP:
+            shape = self._classify(points, baseline)
+            if shape == 'scattered':
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "These points do not form a trend: Kt spans {0:.1f}% and moves both ways "
+                    "across the range. Saturation is monotone, so nothing here can be read as "
+                    "a property of the motor.").format(spread * 100.0))
+                lines.append("")
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "The measurement is not repeating well enough to compare levels. The motor "
+                    "warming between them moves the magnets, and levels near the voltage limit "
+                    "are biased low. Let it cool, keep the top current well away from where the "
+                    "sweep fails, and prefer a single measurement at low current."))
+            elif shape == 'rising':
                 # Saturation can only take torque away. Kt climbing with current is not
                 # the magnetics, it is the measurement, so it is reported as a fault in
                 # the reading rather than as a clean bill of health.
@@ -1085,7 +1127,7 @@ class SaturationSweepWorker(QObject):
                     "The usual cause is the reactive voltage: the drive reports the magnitude "
                     "of the voltage vector, which carries an omega times L times I term that "
                     "grows with the test current. Check that phase_inductance is calibrated."))
-            elif drop < self.SIGNIFICANT_DROP:
+            elif shape == 'flat':
                 highest_current, highest_kt = points[-1]
                 lines.append(QCoreApplication.translate(
                     "SaturationSweepWorker",
@@ -1143,7 +1185,11 @@ class SaturationSweepWorker(QObject):
             # at once, without needing to know which one dominates. Hardware showed the
             # size of it: 0.4051 at 5 A and 0.3809 at 6.2 A for the same motor, about
             # 1.2% per amp, against an extrapolated 0.4116.
-            clean = [(c, kt) for c, kt in points if kt / baseline >= 1.0 - self.SIGNIFICANT_DROP]
+            # Only where the trend is physical. Extrapolating through scatter once put the
+            # unloaded Kt at 0.3533 from points that never went below 0.3579, because a
+            # level that happened to read high dragged the line backwards.
+            clean = ([(c, kt) for c, kt in points if kt / baseline >= 1.0 - self.SIGNIFICANT_DROP]
+                     if shape in ('flat', 'falling') else [])
             unloaded = BackEmfKtWorker._linear_fit(
                 [c for c, _ in clean], [kt for _, kt in clean]) if len(clean) >= 2 else None
             if unloaded is not None:
