@@ -3416,6 +3416,10 @@ This current cannot be measured on a {2:.0f} V supply. Lower the current, or rai
 
 Esta corrente não é mensurável com uma fonte de {2:.0f} V. Reduza a corrente, ou aumente a tensão da fonte.</translation>
     </message>
+    <message>
+        <source>{0} of them were discarded because the drive had no voltage left to push this current any faster. A warm motor makes that worse, since the winding resistance rises with temperature. Use a lower current, let it cool, or raise the supply voltage.</source>
+        <translation>{0} deles foram descartados porque o drive não tinha mais tensão para empurrar essa corrente mais rápido. Motor quente piora isso, já que a resistência do enrolamento sobe com a temperatura. Use uma corrente menor, deixe esfriar, ou aumente a tensão da fonte.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>

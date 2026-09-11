@@ -373,6 +373,7 @@ class BackEmfKtWorker(QObject):
         self._speed_capped = None
         self.runaway_speed = max(self.max_velocity * 2.0, 3.0)
         self._slipped = 0
+        self._saturated = 0
         self._over_count = 0
         self._last_fault = None
         self.lockin_current = current_limit * 0.6
@@ -520,6 +521,23 @@ class BackEmfKtWorker(QObject):
 
         if not volts:
             return None
+
+        # Detect the drive running out of voltage from the reading itself rather than
+        # predicting it. The ceiling is computed from phase_resistance, which was
+        # measured cold, while this sweep heats the winding as it runs: copper gains
+        # about 0.4% per degree, so by 60 C the real drop is over a tenth larger than
+        # the prediction and the headroom quietly disappears. A point sitting at the
+        # modulator's limit is clamped, its voltage no longer tracks speed, and fitting
+        # it is what produces a negative slope.
+        mean_volts = sum(volts) / len(volts)
+        try:
+            modulator_limit = (2.0 / 3.0) * float(self.odrv.vbus_voltage)
+            if mean_volts > 0.97 * modulator_limit:
+                self._saturated += 1
+                return None
+        except Exception:
+            pass
+
         # Open loop only holds while the rotor stays in step with the field. If it
         # slipped, the voltage no longer corresponds to this speed's back-EMF.
         expected_turns = speed / (2.0 * math.pi * pole_pairs)
@@ -781,6 +799,13 @@ class BackEmfKtWorker(QObject):
                     "or never settled at the rest, "
                     "so there are not enough points to fit a line through.{2}").format(
                         len(usable), total,
+                        ("\n\n" + QCoreApplication.translate(
+                            "BackEmfKtWorker",
+                            "{0} of them were discarded because the drive had no voltage left to "
+                            "push this current any faster. A warm motor makes that worse, since "
+                            "the winding resistance rises with temperature. Use a lower current, "
+                            "let it cool, or raise the supply voltage.").format(self._saturated))
+                        if self._saturated else
                         ("\n\nThe axis faulted during the spin: " + self._last_fault)
                         if self._last_fault else
                         "\n\nCheck 'Show Errors': the axis is probably faulting."))
