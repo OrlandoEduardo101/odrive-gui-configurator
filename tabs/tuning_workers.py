@@ -374,6 +374,10 @@ class BackEmfKtWorker(QObject):
         self.runaway_speed = max(self.max_velocity * 2.0, 3.0)
         self._slipped = 0
         self._saturated = 0
+        # Filled in after a successful fit, and accepted from a previous measurement.
+        # The configured phase_resistance is a cold-motor number; these are hot.
+        self.measured_resistance = None
+        self.resistance_override = None
         self._over_count = 0
         self._last_fault = None
         self.lockin_current = current_limit * 0.6
@@ -727,7 +731,14 @@ class BackEmfKtWorker(QObject):
                 # not reach, where the applied voltage stops rising and the fitted slope
                 # is noise, sometimes negative.
                 modulator_volts = (2.0 / 3.0) * float(self.odrv.vbus_voltage)
-                resistive_drop = float(axis.motor.config.phase_resistance) * self.lockin_current
+                # phase_resistance was measured on a cold motor. Copper gains about
+                # 0.4% per degree, so after a few minutes of sweeping the real drop is
+                # well above it and the headroom is smaller than this predicts. When an
+                # earlier measurement handed back a hot resistance, trust that instead.
+                winding_ohms = self.resistance_override
+                if not winding_ohms:
+                    winding_ohms = float(axis.motor.config.phase_resistance)
+                resistive_drop = winding_ohms * self.lockin_current
                 available_volts = 0.7 * max(modulator_volts - resistive_drop, 0.5)
                 if flux_estimate > 0:
                     # No floor here. Clamping the ceiling up to a minimum would let the
@@ -815,6 +826,12 @@ class BackEmfKtWorker(QObject):
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "All points landed at the same speed."))
             flux_linkage, intercept, r_squared, flux_error = fit
+            # The line's intercept is the voltage left at zero speed: the winding drop
+            # plus inverter dead time. Dividing by the test current therefore slightly
+            # overstates the resistance, which errs toward a lower speed ceiling and is
+            # the safe direction to be wrong in.
+            if intercept > 0 and self.lockin_current > 0:
+                self.measured_resistance = intercept / self.lockin_current
             if flux_linkage <= 0:
                 raise RuntimeError(QCoreApplication.translate(
                     "BackEmfKtWorker", "The fitted slope is negative, which is not physical."))
@@ -934,7 +951,7 @@ class SaturationSweepWorker(QObject):
             self._child.stop()
 
     def run(self):
-        points, stopped_at = [], None
+        points, stopped_at, hot_ohms = [], None, None
         try:
             for index, current in enumerate(self.currents):
                 if not self._is_running:
@@ -954,6 +971,7 @@ class SaturationSweepWorker(QObject):
                 worker = BackEmfKtWorker(self.odrv, self.max_velocity, self.speed_count,
                                          current * 1.25, self.settle_s, self.sample_s)
                 worker.lockin_current = current
+                worker.resistance_override = hot_ohms
                 self._child = worker
                 outcome = {}
                 worker.result.connect(
@@ -969,6 +987,8 @@ class SaturationSweepWorker(QObject):
                     stopped_at = (current, reason)
                     break
                 points.append((current, outcome['kt']))
+                if worker.measured_resistance:
+                    hot_ohms = worker.measured_resistance
 
             if len(points) < 2:
                 detail = ""
