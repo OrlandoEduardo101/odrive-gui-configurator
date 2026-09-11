@@ -2272,6 +2272,54 @@ It only has to overcome cogging and friction and get up to speed. More than that
 
 Ele só precisa vencer o cogging e o atrito e chegar na velocidade. Mais que isso é calor, não precisão. Aumente apenas se houver pontos rejeitados por escorregamento do rotor.</translation>
     </message>
+    <message>
+        <source>Real Peak Torque (saturation)</source>
+        <translation>Torque de Pico Real (saturação)</translation>
+    </message>
+    <message>
+        <source>Peak torque is Kt times current only while Kt holds. Push enough current and the iron saturates: more amps stop buying proportionally more torque, and the rest becomes heat. This measures Kt at several currents to find where that starts.
+
+It repeats the open loop measurement above at each current, so the motor turns slowly at a commanded speed rather than accelerating freely.</source>
+        <translation>O torque de pico é Kt vezes corrente apenas enquanto o Kt se mantém. Com corrente suficiente o ferro satura: mais ampères deixam de comprar torque proporcional, e o resto vira calor. Isto mede o Kt em várias correntes para achar onde isso começa.
+
+Ele repete a medição em malha aberta acima em cada corrente, então o motor gira devagar numa velocidade comandada em vez de acelerar livremente.</translation>
+    </message>
+    <message>
+        <source>From:</source>
+        <translation>De:</translation>
+    </message>
+    <message>
+        <source>Up to:</source>
+        <translation>Até:</translation>
+    </message>
+    <message>
+        <source>Current levels:</source>
+        <translation>Níveis de corrente:</translation>
+    </message>
+    <message>
+        <source>Stay within what your supply and motor can take. Each point runs at this current for the length of one measurement, and all of it becomes heat.</source>
+        <translation>Fique dentro do que a sua fonte e o seu motor aguentam. Cada ponto roda nessa corrente pelo tempo de uma medição, e tudo isso vira calor.</translation>
+    </message>
+    <message>
+        <source>Find Real Peak Torque</source>
+        <translation>Achar o Torque de Pico Real</translation>
+    </message>
+    <message>
+        <source>The upper current must be above the lower one.</source>
+        <translation>A corrente superior precisa ser maior que a inferior.</translation>
+    </message>
+    <message>
+        <source>{0} measurements, about {1:.0f} min {2:.0f} s.</source>
+        <translation>{0} medições, cerca de {1:.0f} min {2:.0f} s.</translation>
+    </message>
+    <message>
+        <source>This spins the motor at up to {0:.1f} A, and all of that current becomes heat.
+
+Is the shaft free, and is the motor cool?</source>
+        <translation>Isto gira o motor com até {0:.1f} A, e toda essa corrente vira calor.
+
+O eixo está livre e o motor está frio?</translation>
+    </message>
 </context>
 <context>
     <name>AlignmentTab</name>
@@ -3561,6 +3609,61 @@ As configurações originais foram restauradas.</translation>
     <message>
         <source>An offset only survives a reboot when the encoder uses the Z index with pre-calibrated enabled.</source>
         <translation>Um offset só sobrevive a um reboot quando o encoder usa o índice Z com pre-calibrated habilitado.</translation>
+    </message>
+</context>
+<context>
+    <name>SaturationSweepWorker</name>
+    <message>
+        <source>Kt against current:</source>
+        <translation>Kt em função da corrente:</translation>
+    </message>
+    <message>
+        <source>At least two current levels are needed.</source>
+        <translation>São necessários ao menos dois níveis de corrente.</translation>
+    </message>
+    <message>
+        <source>What limits you is heat rather than magnetics: current squared times resistance, all of it turning into temperature. The Safety tab measures that.</source>
+        <translation>O que te limita é o calor, não o magnetismo: corrente ao quadrado vezes resistência, tudo virando temperatura. A aba Segurança mede isso.</translation>
+    </message>
+    <message>
+        <source>Sweep cancelled.</source>
+        <translation>Varredura cancelada.</translation>
+    </message>
+    <message>
+        <source>Each point carries roughly a percent of measurement uncertainty, so read a change smaller than {0:.0f}% as noise.</source>
+        <translation>Cada ponto carrega cerca de um por cento de incerteza de medição, então leia uma variação menor que {0:.0f}% como ruído.</translation>
+    </message>
+    <message>
+        <source>Measuring Kt at {0:.1f} A ({1} of {2})...</source>
+        <translation>Medindo o Kt a {0:.1f} A ({1} de {2})...</translation>
+    </message>
+    <message>
+        <source>  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   peak {3:.1f} Nm</source>
+        <translation>  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   pico {3:.1f} Nm</translation>
+    </message>
+    <message>
+        <source>Kt holds to within {0:.1f}% across this range, so the iron is not saturating up to {1:.1f} A. Peak torque there really is Kt times current, about {2:.1f} Nm.</source>
+        <translation>O Kt se mantém dentro de {0:.1f}% nessa faixa, então o ferro não está saturando até {1:.1f} A. O torque de pico ali é realmente Kt vezes corrente, cerca de {2:.1f} Nm.</translation>
+    </message>
+    <message>
+        <source>Kt falls {0:.1f}% by {1:.1f} A, which is saturation: past there more current buys less torque than it costs in heat.</source>
+        <translation>O Kt cai {0:.1f}% até {1:.1f} A, e isso é saturação: dali em diante mais corrente compra menos torque do que custa em calor.</translation>
+    </message>
+    <message>
+        <source>The sweep failed: {0}</source>
+        <translation>A varredura falhou: {0}</translation>
+    </message>
+    <message>
+        <source>The measurement at {0:.1f} A failed, so the sweep cannot continue:
+
+{1}</source>
+        <translation>A medição a {0:.1f} A falhou, então a varredura não pode continuar:
+
+{1}</translation>
+    </message>
+    <message>
+        <source>It starts around {0:.1f} A, so real peak torque is about {1:.1f} Nm rather than the {2:.1f} Nm that multiplying the unloaded Kt would suggest.</source>
+        <translation>Ela começa por volta de {0:.1f} A, então o torque de pico real é cerca de {1:.1f} Nm em vez dos {2:.1f} Nm que multiplicar o Kt sem carga sugeriria.</translation>
     </message>
 </context>
 </TS>

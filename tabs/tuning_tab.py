@@ -29,7 +29,7 @@ from PySide6.QtGui import QDoubleValidator
 from PySide6.QtCore import Qt, QEvent, QThread
 
 from .base_tab import BaseTab
-from .tuning_workers import BackEmfKtWorker
+from .tuning_workers import BackEmfKtWorker, SaturationSweepWorker
 from app_config import AppColors, AppMessages
 
 GRAVITY = 9.80665
@@ -58,6 +58,8 @@ class TuningTab(BaseTab):
         self.backemf_kt = None
         self.auto_thread = None
         self.auto_worker = None
+        self.sat_thread = None
+        self.sat_worker = None
         self._setup_ui()
         self.retranslate_ui()
 
@@ -223,10 +225,54 @@ class TuningTab(BaseTab):
         auto_layout.addWidget(self.auto_result_label)
         auto_layout.addWidget(self.compare_label)
 
+        # --- Saturation: is peak torque really Kt times current? ---
+        self.sat_group = QGroupBox()
+        sat_layout = QVBoxLayout(self.sat_group)
+        sat_layout.setSpacing(4)
+        self.sat_help = QLabel()
+        self.sat_help.setWordWrap(True)
+        self.sat_help.setStyleSheet(f"color: {AppColors.INFO};")
+        sat_layout.addWidget(self.sat_help)
+
+        sat_form = QFormLayout()
+        self.sat_from = QDoubleSpinBox()
+        self.sat_from.setRange(2.0, 40.0); self.sat_from.setDecimals(1); self.sat_from.setValue(6.0)
+        self.sat_from.setSuffix(" A")
+        self.sat_to = QDoubleSpinBox()
+        self.sat_to.setRange(4.0, 60.0); self.sat_to.setDecimals(1); self.sat_to.setValue(24.0)
+        self.sat_to.setSuffix(" A")
+        self.sat_steps = QSpinBox()
+        self.sat_steps.setRange(3, 8); self.sat_steps.setValue(5)
+        for widget in (self.sat_from, self.sat_to, self.sat_steps):
+            widget.valueChanged.connect(self._update_sat_estimate)
+        self.label_sat_from, self.label_sat_to, self.label_sat_steps = QLabel(), QLabel(), QLabel()
+        sat_form.addRow(self.label_sat_from, self.sat_from)
+        sat_form.addRow(self.label_sat_to, self.sat_to)
+        sat_form.addRow(self.label_sat_steps, self.sat_steps)
+        sat_layout.addLayout(sat_form)
+
+        self.sat_estimate = QLabel()
+        sat_layout.addWidget(self.sat_estimate)
+
+        sat_buttons = QHBoxLayout()
+        self.sat_start_btn = QPushButton(); self.sat_start_btn.clicked.connect(self.start_saturation)
+        self.sat_cancel_btn = QPushButton(); self.sat_cancel_btn.clicked.connect(self.cancel_saturation)
+        self.sat_cancel_btn.setEnabled(False)
+        sat_buttons.addWidget(self.sat_start_btn); sat_buttons.addWidget(self.sat_cancel_btn)
+        sat_buttons.addStretch()
+        sat_layout.addLayout(sat_buttons)
+
+        self.sat_progress = QProgressBar(); self.sat_progress.setRange(0, 100)
+        self.sat_progress.setVisible(False)
+        self.sat_result = QLabel(); self.sat_result.setWordWrap(True)
+        sat_layout.addWidget(self.sat_progress)
+        sat_layout.addWidget(self.sat_result)
+
         main_layout.addWidget(self.setup_group)
         main_layout.addWidget(self.capture_group)
         main_layout.addWidget(self.result_group)
         main_layout.addWidget(self.auto_group)
+        main_layout.addWidget(self.sat_group)
         main_layout.addStretch()
 
     def retranslate_ui(self):
@@ -274,6 +320,20 @@ class TuningTab(BaseTab):
         self.auto_cancel_btn.setText(self.tr("Cancel"))
         self.auto_apply_btn.setText(self.tr("Apply This Kt"))
 
+        self.sat_group.setTitle(self.tr("Real Peak Torque (saturation)"))
+        self.sat_help.setText(self.tr(
+            "Peak torque is Kt times current only while Kt holds. Push enough current and the "
+            "iron saturates: more amps stop buying proportionally more torque, and the rest "
+            "becomes heat. This measures Kt at several currents to find where that starts.\n\n"
+            "It repeats the open loop measurement above at each current, so the motor turns "
+            "slowly at a commanded speed rather than accelerating freely."))
+        self.label_sat_from.setText(self.tr("From:"))
+        self.label_sat_to.setText(self.tr("Up to:"))
+        self.label_sat_steps.setText(self.tr("Current levels:"))
+        self.sat_to.setToolTip(self.tr("Stay within what your supply and motor can take. Each point runs at this current for the length of one measurement, and all of it becomes heat."))
+        self.sat_start_btn.setText(self.tr("Find Real Peak Torque"))
+        self.sat_cancel_btn.setText(self.tr("Cancel"))
+        self._update_sat_estimate()
         self._on_method_changed()
         self._recompute()
         self._refresh_configured_kt()
@@ -629,6 +689,84 @@ class TuningTab(BaseTab):
         if not self.backemf_kt:
             return
         self._write_torque_constant(self.backemf_kt)
+
+    # ------------------------------------------------- saturation / real peak ---
+
+    def _sat_currents(self):
+        """The current levels to test, evenly spread over the requested range."""
+        low, high, steps = self.sat_from.value(), self.sat_to.value(), self.sat_steps.value()
+        if high <= low:
+            return []
+        return [low + (high - low) * i / (steps - 1) for i in range(steps)]
+
+    def _update_sat_estimate(self):
+        currents = self._sat_currents()
+        if not currents:
+            self.sat_estimate.setText(self.tr("The upper current must be above the lower one."))
+            self.sat_estimate.setStyleSheet(f"color: {AppColors.WARNING};")
+            self.sat_start_btn.setEnabled(False)
+            return
+        # One full back-EMF measurement per level, both directions.
+        seconds = len(currents) * self.auto_points.value() * 2 * 4
+        self.sat_estimate.setText(self.tr("{0} measurements, about {1:.0f} min {2:.0f} s.").format(
+            len(currents), seconds // 60, seconds % 60))
+        self.sat_estimate.setStyleSheet("")
+        self.sat_start_btn.setEnabled(self.sat_thread is None)
+
+    def start_saturation(self):
+        odrv = self.get_odrv()
+        if not odrv or self.sat_thread is not None:
+            return
+        currents = self._sat_currents()
+        if not currents:
+            return
+        confirm = QMessageBox.question(self, self.tr("Confirm"), self.tr(
+            "This spins the motor at up to {0:.1f} A, and all of that current becomes heat.\n\n"
+            "Is the shaft free, and is the motor cool?").format(max(currents)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        self.sat_start_btn.setEnabled(False)
+        self.sat_cancel_btn.setEnabled(True)
+        self.sat_progress.setVisible(True)
+        self.sat_progress.setValue(0)
+
+        self.sat_thread = QThread()
+        self.sat_worker = SaturationSweepWorker(
+            odrv, currents, max_velocity=self.auto_max_vel.value(),
+            speed_count=self.auto_points.value(), settle_s=1.5, sample_s=1.0)
+        self.sat_worker.moveToThread(self.sat_thread)
+        self.sat_thread.started.connect(self.sat_worker.run)
+        self.sat_worker.progress.connect(self._on_sat_progress)
+        self.sat_worker.result.connect(self._on_sat_result)
+        self.sat_worker.finished.connect(self.sat_thread.quit)
+        self.sat_worker.finished.connect(self.sat_worker.deleteLater)
+        self.sat_thread.finished.connect(self.sat_thread.deleteLater)
+        self.sat_thread.finished.connect(self._on_sat_thread_finished)
+        self.sat_thread.start()
+
+    def cancel_saturation(self):
+        if self.sat_worker:
+            self.sat_worker.stop()
+            self.sat_cancel_btn.setEnabled(False)
+
+    def _on_sat_progress(self, message, percent):
+        self.sat_result.setText(message)
+        self.sat_result.setStyleSheet("")
+        self.sat_progress.setValue(percent)
+
+    def _on_sat_result(self, success, message, points):
+        self.sat_result.setText(message)
+        self.sat_result.setStyleSheet(f"color: {AppColors.SUCCESS if success else AppColors.ERROR};")
+        if success:
+            self.sat_progress.setValue(100)
+
+    def _on_sat_thread_finished(self):
+        self.sat_thread, self.sat_worker = None, None
+        self.sat_cancel_btn.setEnabled(False)
+        self.sat_progress.setVisible(False)
+        self._update_sat_estimate()
 
     # ------------------------------------------------------------ BaseTab ---
 

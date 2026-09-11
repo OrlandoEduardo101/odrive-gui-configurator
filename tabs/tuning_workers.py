@@ -835,3 +835,150 @@ class BackEmfKtWorker(QObject):
     def _go_idle(self):
         self.odrv.axis0.requested_state = AXIS_STATE_IDLE
         time.sleep(0.15)
+
+
+class SaturationSweepWorker(QObject):
+    """
+    Measures Kt at several current levels to find where the iron starts to saturate.
+
+    The torque a motor can produce is Kt times current only while Kt holds. Push enough
+    current and the stator iron saturates: more amps stop buying proportionally more
+    torque, and the extra goes to heat. The current at which that begins is the motor's
+    real peak, as opposed to the number you get by multiplying Kt by whatever the current
+    limit happens to be set to.
+
+    The obvious test, ramping current and watching acceleration fall off, does not work
+    here. With a free shaft the motor accelerates until back-EMF plus the resistive drop
+    consume the bus, and past that the commanded current is simply not delivered, so the
+    acceleration falls for a reason that has nothing to do with the iron. On a 24 V bus
+    that happens at a few turns per second, long before saturation. It also spins the
+    wheel to the bus limited free speed, which is the range that has already damaged
+    hardware here.
+
+    Measuring Kt directly at each current avoids both problems. The back-EMF measurement
+    already caps its own speed against the available voltage, so voltage saturation
+    cannot be mistaken for the magnetic kind, and the motor turns slowly under a
+    commanded open loop speed rather than accelerating freely.
+    """
+    progress = Signal(str, int)
+    result = Signal(bool, str, object)   # success, report, list of (current, kt, error)
+    finished = Signal()
+
+    # A fall smaller than this is inside the noise of two measurements that each carry
+    # about a percent of uncertainty, so it is not evidence of anything.
+    SIGNIFICANT_DROP = 0.03
+
+    def __init__(self, odrv, currents, max_velocity, speed_count, settle_s, sample_s):
+        super().__init__()
+        self.odrv = odrv
+        self.currents = sorted(currents)
+        self.max_velocity = max_velocity
+        self.speed_count = speed_count
+        self.settle_s = settle_s
+        self.sample_s = sample_s
+        self._is_running = True
+        self._child = None
+
+    def stop(self):
+        self._is_running = False
+        if self._child:
+            self._child.stop()
+
+    def run(self):
+        points = []
+        try:
+            for index, current in enumerate(self.currents):
+                if not self._is_running:
+                    raise InterruptedError
+                self.progress.emit(QCoreApplication.translate(
+                    "SaturationSweepWorker", "Measuring Kt at {0:.1f} A ({1} of {2})...")
+                    .format(current, index + 1, len(self.currents)),
+                    int(100 * index / len(self.currents)))
+
+                # Reuse the whole measurement rather than reimplementing it: every guard
+                # it carries, the voltage cap, the slip rejection, the steadiness filter,
+                # the error clearing and the parameter restore, applies here unchanged.
+                # The measurement normally drives at a fraction of the limit it is given.
+                # Here the current is the variable under test, so it is set directly and
+                # the limit only has to leave room for it: otherwise every row would be
+                # labelled with a current the motor never actually carried.
+                worker = BackEmfKtWorker(self.odrv, self.max_velocity, self.speed_count,
+                                         current * 1.25, self.settle_s, self.sample_s)
+                worker.lockin_current = current
+                self._child = worker
+                outcome = {}
+                worker.result.connect(
+                    lambda ok, msg, kt, store=outcome: store.update(ok=ok, msg=msg, kt=kt))
+                worker.run()
+                self._child = None
+
+                if not outcome.get('ok') or not outcome.get('kt'):
+                    first_line = (outcome.get('msg') or '').splitlines()[0] if outcome.get('msg') else ''
+                    raise RuntimeError(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "The measurement at {0:.1f} A failed, so the sweep cannot continue:\n\n{1}"
+                    ).format(current, first_line))
+                points.append((current, outcome['kt']))
+
+            if len(points) < 2:
+                raise RuntimeError(QCoreApplication.translate(
+                    "SaturationSweepWorker", "At least two current levels are needed."))
+
+            baseline = points[0][1]
+            lines = [QCoreApplication.translate("SaturationSweepWorker", "Kt against current:"), ""]
+            for current, kt in points:
+                change = (kt / baseline - 1.0) * 100.0
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker", "  {0:5.1f} A   Kt {1:.4f}   {2:+.1f}%   peak {3:.1f} Nm")
+                    .format(current, kt, change, kt * current))
+            lines.append("")
+
+            worst = min(points, key=lambda p: p[1])
+            drop = 1.0 - worst[1] / baseline
+            if drop < self.SIGNIFICANT_DROP:
+                highest_current, highest_kt = points[-1]
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "Kt holds to within {0:.1f}% across this range, so the iron is not saturating "
+                    "up to {1:.1f} A. Peak torque there really is Kt times current, about "
+                    "{2:.1f} Nm.").format(drop * 100.0, highest_current, highest_kt * highest_current))
+                lines.append("")
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "What limits you is heat rather than magnetics: current squared times "
+                    "resistance, all of it turning into temperature. The Safety tab measures that."))
+            else:
+                knee = next((c for c, kt in points if kt / baseline < 1.0 - self.SIGNIFICANT_DROP), None)
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "Kt falls {0:.1f}% by {1:.1f} A, which is saturation: past there more current "
+                    "buys less torque than it costs in heat.").format(drop * 100.0, worst[0]))
+                if knee:
+                    usable = next(kt for c, kt in points if c == knee)
+                    lines.append("")
+                    lines.append(QCoreApplication.translate(
+                        "SaturationSweepWorker",
+                        "It starts around {0:.1f} A, so real peak torque is about {1:.1f} Nm rather "
+                        "than the {2:.1f} Nm that multiplying the unloaded Kt would suggest.")
+                        .format(knee, usable * knee, baseline * knee))
+
+            lines.append("")
+            lines.append(QCoreApplication.translate(
+                "SaturationSweepWorker",
+                "Each point carries roughly a percent of measurement uncertainty, so read a change "
+                "smaller than {0:.0f}% as noise.").format(self.SIGNIFICANT_DROP * 100))
+
+            self.result.emit(True, "\n".join(lines), points)
+
+        except InterruptedError:
+            self.result.emit(False, QCoreApplication.translate(
+                "SaturationSweepWorker", "Sweep cancelled."), None)
+        except Exception as e:
+            self.result.emit(False, QCoreApplication.translate(
+                "SaturationSweepWorker", "The sweep failed: {0}").format(e), None)
+        finally:
+            try:
+                self.odrv.axis0.requested_state = AXIS_STATE_IDLE
+            except Exception:
+                pass
+            self.finished.emit()
