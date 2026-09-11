@@ -934,7 +934,7 @@ class SaturationSweepWorker(QObject):
             self._child.stop()
 
     def run(self):
-        points = []
+        points, stopped_at = [], None
         try:
             for index, current in enumerate(self.currents):
                 if not self._is_running:
@@ -962,16 +962,23 @@ class SaturationSweepWorker(QObject):
                 self._child = None
 
                 if not outcome.get('ok') or not outcome.get('kt'):
-                    first_line = (outcome.get('msg') or '').splitlines()[0] if outcome.get('msg') else ''
-                    raise RuntimeError(QCoreApplication.translate(
-                        "SaturationSweepWorker",
-                        "The measurement at {0:.1f} A failed, so the sweep cannot continue:\n\n{1}"
-                    ).format(current, first_line))
+                    # Higher currents leave even less voltage, so there is no point
+                    # carrying on. But whatever was measured before this is real data and
+                    # gets reported: throwing it away wastes the minutes that produced it.
+                    reason = (outcome.get('msg') or '').replace("\n\n", " ").strip()
+                    stopped_at = (current, reason)
+                    break
                 points.append((current, outcome['kt']))
 
             if len(points) < 2:
+                detail = ""
+                if stopped_at:
+                    detail = "\n\n" + QCoreApplication.translate(
+                        "SaturationSweepWorker", "It stopped at {0:.1f} A: {1}").format(*stopped_at)
                 raise RuntimeError(QCoreApplication.translate(
-                    "SaturationSweepWorker", "At least two current levels are needed."))
+                    "SaturationSweepWorker",
+                    "Only {0} current level could be measured, and comparing needs at least two.{1}"
+                ).format(len(points), detail))
 
             baseline = points[0][1]
             lines = [QCoreApplication.translate("SaturationSweepWorker", "Kt against current:"), ""]
@@ -1017,6 +1024,12 @@ class SaturationSweepWorker(QObject):
                 "Each point carries roughly a percent of measurement uncertainty, so read a change "
                 "smaller than {0:.0f}% as noise.").format(self.SIGNIFICANT_DROP * 100))
 
+            if stopped_at:
+                lines.append("")
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "The sweep stopped at {0:.1f} A and the rows above are what it did measure. "
+                    "{1}").format(*stopped_at))
             self.result.emit(True, "\n".join(lines), points)
 
         except InterruptedError:

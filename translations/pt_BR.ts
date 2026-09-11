@@ -3677,5 +3677,17 @@ As configurações originais foram restauradas.</translation>
         <source>It starts around {0:.1f} A, so real peak torque is about {1:.1f} Nm rather than the {2:.1f} Nm that multiplying the unloaded Kt would suggest.</source>
         <translation>Ela começa por volta de {0:.1f} A, então o torque de pico real é cerca de {1:.1f} Nm em vez dos {2:.1f} Nm que multiplicar o Kt sem carga sugeriria.</translation>
     </message>
+    <message>
+        <source>Only {0} current level could be measured, and comparing needs at least two.{1}</source>
+        <translation>Só {0} nível de corrente pôde ser medido, e comparar exige pelo menos dois.{1}</translation>
+    </message>
+    <message>
+        <source>It stopped at {0:.1f} A: {1}</source>
+        <translation>Parou em {0:.1f} A: {1}</translation>
+    </message>
+    <message>
+        <source>The sweep stopped at {0:.1f} A and the rows above are what it did measure. {1}</source>
+        <translation>A varredura parou em {0:.1f} A e as linhas acima são o que ela conseguiu medir. {1}</translation>
+    </message>
 </context>
 </TS>
