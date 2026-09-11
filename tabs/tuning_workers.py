@@ -41,6 +41,12 @@ from odrive.enums import AXIS_STATE_LOCKIN_SPIN
 # saturation while being nothing but a clipped measurement.
 MODULATION_LIMIT = 0.8 * (3.0 ** 0.5) / 2.0
 
+# Copper gains 0.393% of its resistance per degree. With no motor thermistor fitted the
+# winding resistance is the only thermometer available, and the drive reports it twice:
+# phase_resistance from the last calibration, and the fit intercept from a measurement
+# running now. The ratio between them is a temperature rise.
+COPPER_TEMPCO = 0.00393
+
 
 def modulator_ceiling(vbus_voltage):
     """Peak phase voltage amplitude the modulator can deliver, in volts."""
@@ -905,6 +911,37 @@ class BackEmfKtWorker(QObject):
                 lines.append("")
             lines.append(QCoreApplication.translate("BackEmfKtWorker",
                 "Flux linkage {0:.5f} Vs/rad, offset absorbed {1:.2f} V.").format(flux_linkage, intercept))
+
+            # A motor calibrated warm carries that warmth into phase_resistance, and every
+            # later run inherits it: a hardware sequence drifted 0.4431, 0.4702, 0.4944 ohm
+            # across three calibrations, the last of them about 30 C above the first. Each
+            # step cost voltage headroom and flux, so the sweeps grew less repeatable while
+            # the cause stayed invisible for want of a thermistor.
+            if self.measured_resistance:
+                try:
+                    cold = float(axis.motor.config.phase_resistance)
+                except Exception:
+                    cold = 0.0
+                if cold > 0:
+                    rise = (self.measured_resistance / cold - 1.0) / COPPER_TEMPCO
+                    if abs(rise) >= 8.0:
+                        lines.append("")
+                        lines.append(QCoreApplication.translate(
+                            "BackEmfKtWorker",
+                            "The winding measured {0:.3f} ohm against the {1:.3f} ohm from "
+                            "calibration, which puts it about {2:.0f} C {3} than when it was "
+                            "calibrated.").format(
+                                self.measured_resistance, cold, abs(rise),
+                                QCoreApplication.translate("BackEmfKtWorker", "warmer")
+                                if rise > 0 else
+                                QCoreApplication.translate("BackEmfKtWorker", "cooler")))
+                        if rise > 0:
+                            lines.append(QCoreApplication.translate(
+                                "BackEmfKtWorker",
+                                "That costs roughly {0:.1f}% of flux, so Kt reads low by about "
+                                "that much, and it eats the voltage the measurement needs. "
+                                "Calibrating a warm motor writes the warm resistance into the "
+                                "config and every later run inherits it.").format(rise * 0.11))
             if self._speed_capped:
                 asked, used = self._speed_capped
                 lines.append("")

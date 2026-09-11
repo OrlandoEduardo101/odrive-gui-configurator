@@ -3460,6 +3460,22 @@ Esta corrente não é mensurável com uma fonte de {2:.0f} V. Reduza a corrente,
         <source>{0} of them were discarded because the drive had no voltage left to push this current any faster. A warm motor makes that worse, since the winding resistance rises with temperature. Use a lower current, let it cool, or raise the supply voltage.</source>
         <translation>{0} deles foram descartados porque o drive não tinha mais tensão para empurrar essa corrente mais rápido. Motor quente piora isso, já que a resistência do enrolamento sobe com a temperatura. Use uma corrente menor, deixe esfriar, ou aumente a tensão da fonte.</translation>
     </message>
+    <message>
+        <source>The winding measured {0:.3f} ohm against the {1:.3f} ohm from calibration, which puts it about {2:.0f} C {3} than when it was calibrated.</source>
+        <translation>O enrolamento mediu {0:.3f} ohm contra os {1:.3f} ohm da calibração, o que o coloca cerca de {2:.0f} C {3} do que quando foi calibrado.</translation>
+    </message>
+    <message>
+        <source>warmer</source>
+        <translation>mais quente</translation>
+    </message>
+    <message>
+        <source>cooler</source>
+        <translation>mais frio</translation>
+    </message>
+    <message>
+        <source>That costs roughly {0:.1f}% of flux, so Kt reads low by about that much, and it eats the voltage the measurement needs. Calibrating a warm motor writes the warm resistance into the config and every later run inherits it.</source>
+        <translation>Isso custa aproximadamente {0:.1f}% de fluxo, então o Kt sai baixo nessa medida, e consome a tensão de que a medição precisa. Calibrar um motor quente grava a resistência quente na configuração, e toda execução posterior herda isso.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>
