@@ -633,6 +633,38 @@ class BackEmfKtWorker(QObject):
         omega_electrical = abs(mean_turns) * 2.0 * math.pi * pole_pairs
         return omega_electrical, sum(volts) / len(volts), abs(sum(currents) / len(currents))
 
+
+    def _quadrature_volts(self, omega_electrical, volts, current):
+        """
+        Strips the reactive part out of the measured voltage magnitude.
+
+        What the drive reports is |V| = hypot(v_alpha, v_beta), and with Id held at zero
+        the two axes are
+
+            Vd = -omega * L * Iq        Vq = R * Iq + omega * lambda
+
+        so the magnitude carries an inductive term that the straight line has no place
+        for. That term grows with the test current, which makes the fitted slope, and so
+        Kt, come out higher at higher current: a hardware sweep read 0.4238, 0.4394 and
+        0.4509 at 6, 10.5 and 15 A, rising 6.4% across a range where Kt is constant.
+        Removing it brought the same three points to within 1.0% of each other.
+
+        Vq is recovered as sqrt(|V|^2 - (omega * L * I)^2). When the inductance is
+        unknown, or the subtraction would go negative because the model does not fit the
+        reading, the magnitude is returned unchanged rather than a fabricated number.
+        """
+        try:
+            inductance = float(self.odrv.axis0.motor.config.phase_inductance)
+        except Exception:
+            return volts
+        if inductance <= 0.0 or not current:
+            return volts
+        reactive = omega_electrical * inductance * float(current)
+        remainder = volts * volts - reactive * reactive
+        if remainder <= 0.0:
+            return volts
+        return math.sqrt(remainder)
+
     @staticmethod
     def _linear_fit(xs, ys):
         """
@@ -806,7 +838,7 @@ class BackEmfKtWorker(QObject):
                     if use_lockin:
                         omega = direction * target * 2.0 * math.pi * pole_pairs
                         measured = self._measure_lockin(omega)
-                        measurement = (measured[0], measured[1], 0.0) if measured else None
+                        measurement = (measured[0], measured[1], self.lockin_current) if measured else None
                     else:
                         measurement = self._measure_speed(target * direction)
                     if measurement is not None:
@@ -818,7 +850,7 @@ class BackEmfKtWorker(QObject):
             axis.controller.input_vel = 0.0
             self._go_idle()
 
-            usable = [(w, v) for w, v, _ in points if w > 1.0]
+            usable = [(w, self._quadrature_volts(w, v, i)) for w, v, i in points if w > 1.0]
             # Two points always fit a line perfectly, so an R squared of 1.0000 from two
             # readings is not evidence of a good measurement, it is the absence of any
             # evidence at all. Enough points to actually test the straight line, or no
@@ -1030,14 +1062,36 @@ class SaturationSweepWorker(QObject):
             lines.append("")
 
             worst = min(points, key=lambda p: p[1])
+            best = max(points, key=lambda p: p[1])
             drop = 1.0 - worst[1] / baseline
-            if drop < self.SIGNIFICANT_DROP:
+            rise = best[1] / baseline - 1.0
+            # Reporting only the drop once read as "Kt holds to within 0.0%" under a table
+            # that plainly showed 6.4%, because a sweep whose Kt rose had no drop to
+            # report. The spread is what the reader can see, so the spread is what gets
+            # named.
+            spread = (best[1] - worst[1]) / baseline
+            if drop < self.SIGNIFICANT_DROP and rise >= self.SIGNIFICANT_DROP:
+                # Saturation can only take torque away. Kt climbing with current is not
+                # the magnetics, it is the measurement, so it is reported as a fault in
+                # the reading rather than as a clean bill of health.
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "Kt rises {0:.1f}% across this range. Saturation can only take torque away, "
+                    "never add it, so this is a measurement artefact and not a property of the "
+                    "motor. Treat these numbers as unreliable.").format(rise * 100.0))
+                lines.append("")
+                lines.append(QCoreApplication.translate(
+                    "SaturationSweepWorker",
+                    "The usual cause is the reactive voltage: the drive reports the magnitude "
+                    "of the voltage vector, which carries an omega times L times I term that "
+                    "grows with the test current. Check that phase_inductance is calibrated."))
+            elif drop < self.SIGNIFICANT_DROP:
                 highest_current, highest_kt = points[-1]
                 lines.append(QCoreApplication.translate(
                     "SaturationSweepWorker",
                     "Kt holds to within {0:.1f}% across this range, so the iron is not saturating "
                     "up to {1:.1f} A. Peak torque there really is Kt times current, about "
-                    "{2:.1f} Nm.").format(drop * 100.0, highest_current, highest_kt * highest_current))
+                    "{2:.1f} Nm.").format(spread * 100.0, highest_current, highest_kt * highest_current))
                 lines.append("")
                 lines.append(QCoreApplication.translate(
                     "SaturationSweepWorker",

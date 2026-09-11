@@ -3729,5 +3729,13 @@ As configurações originais foram restauradas.</translation>
         <source>The sweep stopped at {0:.1f} A and the rows above are what it did measure. {1}</source>
         <translation>A varredura parou em {0:.1f} A e as linhas acima são o que ela conseguiu medir. {1}</translation>
     </message>
+    <message>
+        <source>Kt rises {0:.1f}% across this range. Saturation can only take torque away, never add it, so this is a measurement artefact and not a property of the motor. Treat these numbers as unreliable.</source>
+        <translation>O Kt sobe {0:.1f}% nesta faixa. Saturação só pode tirar torque, nunca acrescentar, então isto é artefato de medição e não uma propriedade do motor. Trate estes números como não confiáveis.</translation>
+    </message>
+    <message>
+        <source>The usual cause is the reactive voltage: the drive reports the magnitude of the voltage vector, which carries an omega times L times I term that grows with the test current. Check that phase_inductance is calibrated.</source>
+        <translation>A causa usual é a tensão reativa: a placa reporta o módulo do vetor de tensão, que carrega um termo ômega vezes L vezes I e cresce com a corrente de teste. Confira se a phase_inductance está calibrada.</translation>
+    </message>
 </context>
 </TS>
