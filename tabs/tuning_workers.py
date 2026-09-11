@@ -701,19 +701,43 @@ class BackEmfKtWorker(QObject):
             try:
                 configured_kt = float(axis.motor.config.torque_constant)
                 flux_estimate = configured_kt / (1.5 * pole_pairs)
-                # Two thirds of the bus is what the modulator can put on the dq vector,
-                # and 70% of that leaves room for the resistive drop and control margin.
-                available_volts = 0.7 * (2.0 / 3.0) * float(self.odrv.vbus_voltage)
+                # Two thirds of the bus is what the modulator can put on the dq vector.
+                # The test current takes its own share of that through the winding
+                # resistance before any of it is left to balance back-EMF, and at high
+                # current that share dominates: at 19.5 A into 0.44 ohm it is more than
+                # half the bus. Ignoring it let the sweep ask for speeds the drive could
+                # not reach, where the applied voltage stops rising and the fitted slope
+                # is noise, sometimes negative.
+                modulator_volts = (2.0 / 3.0) * float(self.odrv.vbus_voltage)
+                resistive_drop = float(axis.motor.config.phase_resistance) * self.lockin_current
+                available_volts = 0.7 * max(modulator_volts - resistive_drop, 0.5)
                 if flux_estimate > 0:
+                    # No floor here. Clamping the ceiling up to a minimum would let the
+                    # sweep ask for a speed the bus cannot sustain, and the measurement
+                    # would come back wrong rather than refusing: at 33 A on a 24 V bus
+                    # the true ceiling is half a turn per second, and forcing it to one
+                    # produced a confident Kt that was a third too low.
                     ceiling = available_volts / flux_estimate / (2.0 * math.pi * pole_pairs)
                     if ceiling < usable_velocity:
-                        usable_velocity = max(ceiling, 1.0)
+                        usable_velocity = ceiling
                         self._speed_capped = (self.max_velocity, usable_velocity)
             except Exception:
                 pass
 
             # Spread the speeds over the upper half of the range: too slow and the
             # back-EMF is swamped by inverter dead time and the resistive drop.
+            # Below this there is not enough back-EMF spread for the slope to mean
+            # anything, and the honest answer is that this current cannot be measured on
+            # this bus rather than a number pulled from noise.
+            if usable_velocity < 0.8:
+                raise RuntimeError(QCoreApplication.translate(
+                    "BackEmfKtWorker",
+                    "At {0:.1f} A the winding drop leaves too little bus voltage to spin fast "
+                    "enough to measure back-EMF: the ceiling works out at {1:.2f} turns/s.\n\n"
+                    "This current cannot be measured on a {2:.0f} V supply. Lower the current, or "
+                    "raise the supply voltage.").format(
+                        self.lockin_current, usable_velocity, float(self.odrv.vbus_voltage)))
+
             lowest = usable_velocity / 3.0
             step = (usable_velocity - lowest) / max(self.speed_count - 1, 1)
             targets = [lowest + i * step for i in range(self.speed_count)]

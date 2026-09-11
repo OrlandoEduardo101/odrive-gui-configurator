@@ -3408,6 +3408,14 @@ O controlador de velocidade não está segurando neste motor. O método do peso 
         <source>That is {0:.1f}% uncertainty on Kt. Sampling more speeds separates the slope from the offset better and tightens it; repeating the run does not.</source>
         <translation>Isso é {0:.1f}% de incerteza no Kt. Amostrar mais velocidades separa melhor a inclinação do offset e aperta o resultado; repetir a execução não.</translation>
     </message>
+    <message>
+        <source>At {0:.1f} A the winding drop leaves too little bus voltage to spin fast enough to measure back-EMF: the ceiling works out at {1:.2f} turns/s.
+
+This current cannot be measured on a {2:.0f} V supply. Lower the current, or raise the supply voltage.</source>
+        <translation>Com {0:.1f} A a queda no enrolamento deixa tensão de barramento insuficiente para girar rápido o bastante e medir a back-EMF: o teto fica em {1:.2f} voltas/s.
+
+Esta corrente não é mensurável com uma fonte de {2:.0f} V. Reduza a corrente, ou aumente a tensão da fonte.</translation>
+    </message>
 </context>
 <context>
     <name>FirmwareDownloadWorker</name>
