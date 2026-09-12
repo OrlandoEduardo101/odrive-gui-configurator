@@ -139,17 +139,35 @@ class CalibrationQualityWorker(QObject):
         return int(getattr(axis.encoder.config, self._offset_attr))
 
     def _series(self, label, base_pct):
-        """Runs the calibration self.runs times, returning the offsets it produced."""
+        """
+        Runs the calibration, discarding the first result, and returns the rest.
+
+        The first run after the motor has been sitting still is not like the ones that
+        follow it. The rotor starts parked in a cogging detent with the mechanical slack
+        in the mount taken up in whatever direction it last settled, and that first
+        calibration spends itself taking that up. Two sequences on the same motor showed
+        it plainly: offsets 378, 210, 244 and 754, 375, 431, where the opening run sits
+        151 and 351 counts above the pair behind it. Both lean the same way, and random
+        scatter does not pick a direction. Dropping it took the spread of the first
+        sequence from 13.8 to 2.8 electrical degrees.
+
+        The discarded value is kept so the report can show it rather than quietly
+        swallowing a run the user waited for.
+        """
         offsets = []
-        for i in range(self.runs):
+        total = self.runs + 1
+        for i in range(total):
             if not self._is_running:
                 return None
             self.progress.emit(QCoreApplication.translate(
                 "CalibrationQualityWorker", "{0}: calibration {1} of {2}...")
-                .format(label, i + 1, self.runs), base_pct + int(45 * i / self.runs))
+                .format(label, i + 1, total), base_pct + int(45 * i / total))
             value = self._calibrate_once()
             if value is None:
                 return None
+            if i == 0:
+                self.discarded = value
+                continue
             offsets.append(value)
         return offsets
 
@@ -194,6 +212,7 @@ class CalibrationQualityWorker(QObject):
         axis = self.odrv.axis0
         # Firmware 0.5.6 names it phase_offset; earlier 0.5.x called it offset.
         self._offset_attr = None
+        self.discarded = None
         for name in ('phase_offset', 'offset'):
             if hasattr(axis.encoder.config, name):
                 self._offset_attr = name
@@ -257,6 +276,13 @@ class CalibrationQualityWorker(QObject):
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "  spread {0} counts = {1:.2f} electrical degrees").format(
                         round(spread), to_degrees(spread)),
+            ]
+            if self.discarded is not None:
+                lines.append(QCoreApplication.translate(
+                    "CalibrationQualityWorker",
+                    "  a warm-up run at {0} was discarded before these").format(
+                        round(self._reduce([self.discarded], period)[0])))
+            lines += [
                 "",
                 QCoreApplication.translate("CalibrationQualityWorker",
                     "That spread is how much your calibration moves from one run to the next, "

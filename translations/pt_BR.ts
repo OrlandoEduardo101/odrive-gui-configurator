@@ -3678,6 +3678,10 @@ As configurações originais foram restauradas.</translation>
         <source>An offset only survives a reboot when the encoder uses the Z index with pre-calibrated enabled.</source>
         <translation>Um offset só sobrevive a um reboot quando o encoder usa o índice Z com pre-calibrated habilitado.</translation>
     </message>
+    <message>
+        <source>  a warm-up run at {0} was discarded before these</source>
+        <translation>  uma execução de aquecimento em {0} foi descartada antes destas</translation>
+    </message>
 </context>
 <context>
     <name>SaturationSweepWorker</name>
