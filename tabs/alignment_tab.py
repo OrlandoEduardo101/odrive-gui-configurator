@@ -168,10 +168,13 @@ class AlignmentTab(BaseTab):
             per_run = 8
         else:
             per_run = (2 * revolutions * pole_pairs * 2 * math.pi) / (4 * math.pi) + 4
-        total = runs * per_run
+        # One extra run happens before the measured ones and is discarded, so the time
+        # quoted has to include it or the estimate reads short by a calibration.
+        total = (runs + 1) * per_run
         self.estimate_label.setText(
-            self.tr("Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations)")
-            .format(total // 60, total % 60, runs))
+            self.tr("Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations, "
+                    "one of them a discarded warm-up)")
+            .format(total // 60, total % 60, runs + 1))
 
         if pole_pairs and self.main_window.is_connected and self.main_window.odrv_proxy:
             try:

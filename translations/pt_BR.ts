@@ -2683,6 +2683,10 @@ The average is refused anyway when the runs disagree by more than 15 electrical 
         <translation>Desmarcado, isto apenas reporta o quanto a sua calibração é repetível e não altera nada.
 A média é recusada de qualquer forma quando as execuções discordam mais de 15 graus elétricos.</translation>
     </message>
+    <message>
+        <source>Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations, one of them a discarded warm-up)</source>
+        <translation>Duração estimada: cerca de {0:.0f} min {1:.0f} s ({2} calibrações, uma delas um aquecimento descartado)</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -3681,6 +3685,14 @@ As configurações originais foram restauradas.</translation>
     <message>
         <source>  a warm-up run at {0} was discarded before these</source>
         <translation>  uma execução de aquecimento em {0} foi descartada antes destas</translation>
+    </message>
+    <message>
+        <source>The axis reported an error during calibration:
+
+{0}</source>
+        <translation>O eixo reportou um erro durante a calibração:
+
+{0}</translation>
     </message>
 </context>
 <context>

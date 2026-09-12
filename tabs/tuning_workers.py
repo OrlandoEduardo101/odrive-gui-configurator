@@ -53,6 +53,61 @@ def modulator_ceiling(vbus_voltage):
     return MODULATION_LIMIT * (2.0 / 3.0) * float(vbus_voltage)
 
 
+
+def decode_error(value, prefix):
+    """
+    Turns an ODrive error bitfield into the names of the bits that are set.
+
+    Names come from odrive.enums at runtime rather than a table copied into this file,
+    so a firmware that adds a code still reports it, and nothing here can drift out of
+    step with the board. Unrecognised bits are reported as hex rather than dropped.
+    """
+    if not value:
+        return ""
+    try:
+        import odrive.enums as enums
+    except Exception:
+        return hex(value)
+    names, leftover = [], int(value)
+    for name in dir(enums):
+        if not name.startswith(prefix):
+            continue
+        bit = getattr(enums, name)
+        if isinstance(bit, int) and bit and (leftover & bit) == bit:
+            names.append(name[len(prefix):].lower().replace("_", " "))
+            leftover &= ~bit
+    if leftover:
+        names.append(hex(leftover))
+    return ", ".join(names) if names else hex(value)
+
+
+def describe_axis_error(axis):
+    """
+    Describes a faulted axis, following the axis error into whichever component failed.
+
+    An axis error of 0x100 only says "encoder failed"; the reason sits in encoder.error,
+    and reporting the pointer without the thing it points at leaves the user with a
+    number that cannot be looked up.
+    """
+    parts = []
+    for label, prefix, path in (
+        ("axis", "AXIS_ERROR_", ("error",)),
+        ("motor", "MOTOR_ERROR_", ("motor", "error")),
+        ("encoder", "ENCODER_ERROR_", ("encoder", "error")),
+        ("controller", "CONTROLLER_ERROR_", ("controller", "error")),
+    ):
+        try:
+            target = axis
+            for step in path:
+                target = getattr(target, step)
+            value = int(target)
+        except Exception:
+            continue
+        if value:
+            parts.append("{0} {1}: {2}".format(label, hex(value), decode_error(value, prefix)))
+    return "\n".join(parts)
+
+
 class CalibrationQualityWorker(QObject):
     """
     Measures how repeatable ODrive's own encoder offset calibration is, and whether
@@ -123,8 +178,8 @@ class CalibrationQualityWorker(QObject):
             time.sleep(0.1)
         if axis.error != 0:
             raise RuntimeError(QCoreApplication.translate(
-                "CalibrationQualityWorker", "The axis reported an error during calibration: {0}")
-                .format(hex(axis.error)))
+                "CalibrationQualityWorker", "The axis reported an error during calibration:\n\n{0}")
+                .format(describe_axis_error(axis) or hex(axis.error)))
         return True
 
     def _calibrate_once(self):
