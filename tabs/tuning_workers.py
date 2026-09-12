@@ -151,6 +151,7 @@ class CalibrationQualityWorker(QObject):
         self.apply_average = apply_average
         self._is_running = True
         self._saved = {}
+        self._board_current = None
 
     def stop(self):
         self._is_running = False
@@ -177,9 +178,24 @@ class CalibrationQualityWorker(QObject):
                     .format(self.CALIBRATION_TIMEOUT_S))
             time.sleep(0.1)
         if axis.error != 0:
+            detail = describe_axis_error(axis) or hex(axis.error)
+            # This particular failure means the encoder counts did not match the
+            # electrical distance commanded, and the usual reason on a motor with strong
+            # cogging is a test current too low for the rotor to follow the field. Worth
+            # naming, because the board's own calibration can pass at the same moment
+            # while this one fails, purely for running at a different current.
+            if "polpairs" in detail and self._board_current:
+                if self.calibration_current < self._board_current - 0.05:
+                    detail += "\n\n" + QCoreApplication.translate(
+                        "CalibrationQualityWorker",
+                        "This ran at {0:.1f} A while the motor is configured for {1:.1f} A. That "
+                        "means the encoder did not turn as far as the commanded angle, which a "
+                        "current too low to pull the rotor out of its cogging detents will do. "
+                        "Try again at the board's own current.").format(
+                            self.calibration_current, self._board_current)
             raise RuntimeError(QCoreApplication.translate(
                 "CalibrationQualityWorker", "The axis reported an error during calibration:\n\n{0}")
-                .format(describe_axis_error(axis) or hex(axis.error)))
+                .format(detail))
         return True
 
     def _calibrate_once(self):
@@ -268,6 +284,10 @@ class CalibrationQualityWorker(QObject):
         # Firmware 0.5.6 names it phase_offset; earlier 0.5.x called it offset.
         self._offset_attr = None
         self.discarded = None
+        try:
+            self._board_current = float(axis.motor.config.calibration_current)
+        except Exception:
+            self._board_current = None
         for name in ('phase_offset', 'offset'):
             if hasattr(axis.encoder.config, name):
                 self._offset_attr = name

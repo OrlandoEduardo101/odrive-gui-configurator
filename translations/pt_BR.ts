@@ -3694,6 +3694,10 @@ As configurações originais foram restauradas.</translation>
 
 {0}</translation>
     </message>
+    <message>
+        <source>This ran at {0:.1f} A while the motor is configured for {1:.1f} A. That means the encoder did not turn as far as the commanded angle, which a current too low to pull the rotor out of its cogging detents will do. Try again at the board&apos;s own current.</source>
+        <translation>Isto rodou com {0:.1f} A enquanto o motor está configurado para {1:.1f} A. Significa que o encoder não girou tanto quanto o ângulo comandado, que é o que acontece quando a corrente é baixa demais para tirar o rotor dos detents de cogging. Tente de novo com a corrente da própria placa.</translation>
+    </message>
 </context>
 <context>
     <name>SaturationSweepWorker</name>

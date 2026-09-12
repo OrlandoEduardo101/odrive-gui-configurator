@@ -72,7 +72,16 @@ class AlignmentTab(BaseTab):
         self.calib_current_input = QDoubleSpinBox()
         self.calib_current_input.setRange(1.0, 60.0)
         self.calib_current_input.setDecimals(1)
+        # Left at a number of its own this field silently undercut the board. The motor
+        # was configured for 15 A and this offered 10 A, which on a motor with strong
+        # cogging is not enough for the rotor to follow the commanded angle: the encoder
+        # counts then disagree with the electrical distance and the firmware refuses the
+        # calibration with cpr polpairs mismatch. The board's own calibration worked at
+        # the same moment, because it used the board's own current. So this now mirrors
+        # the board and only departs from it when the user says so.
         self.calib_current_input.setValue(10.0)
+        self._calib_current_touched = False
+        self.calib_current_input.valueChanged.connect(self._mark_current_touched)
         self.calib_current_input.setSuffix(" A")
 
         for widget in (self.runs_input, self.revolutions_input, self.calib_current_input):
@@ -178,6 +187,7 @@ class AlignmentTab(BaseTab):
 
         if pole_pairs and self.main_window.is_connected and self.main_window.odrv_proxy:
             try:
+                self._sync_calibration_current()
                 distance = self.main_window.odrv_proxy.odrv.axis0.encoder.config.calib_scan_distance
                 current_revs = distance / (2 * math.pi * pole_pairs)
                 text = self.tr("The board currently scans {0:.2f} mechanical revolutions ({1} pole pairs).").format(
@@ -229,6 +239,30 @@ class AlignmentTab(BaseTab):
     def _on_keep_scan_toggled(self, checked):
         self.revolutions_input.setEnabled(not checked)
         self._update_estimate()
+
+
+    def _mark_current_touched(self, _value):
+        """Remembers that the calibration current is the user's choice, not the board's."""
+        self._calib_current_touched = True
+
+    def _sync_calibration_current(self):
+        """
+        Adopts the board's calibration current until the user overrides it.
+
+        The value that works is whatever the motor was calibrated with, and the board
+        already knows it. Offering a different one by default means this check can fail
+        on a motor whose own Encoder tab calibrates perfectly well.
+        """
+        if self._calib_current_touched:
+            return
+        try:
+            board = float(self.main_window.odrv_proxy.odrv.axis0.motor.config.calibration_current)
+        except Exception:
+            return
+        if board > 0 and abs(board - self.calib_current_input.value()) > 0.05:
+            self.calib_current_input.blockSignals(True)
+            self.calib_current_input.setValue(board)
+            self.calib_current_input.blockSignals(False)
 
     def _pole_pairs(self):
         if not self.main_window.is_connected or not self.main_window.odrv_proxy:
