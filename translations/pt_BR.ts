@@ -2687,6 +2687,166 @@ A média é recusada de qualquer forma quando as execuções discordam mais de 1
         <source>Estimated duration: about {0:.0f} min {1:.0f} s ({2} calibrations, one of them a discarded warm-up)</source>
         <translation>Duração estimada: cerca de {0:.0f} min {1:.0f} s ({2} calibrações, uma delas um aquecimento descartado)</translation>
     </message>
+    <message>
+        <source>Centre Reference</source>
+        <translation>Referência de Centro</translation>
+    </message>
+    <message>
+        <source>An incremental encoder counts from wherever it happens to be at power-on, so without a fixed mark the centre moves every time. The Z index is that mark: the axis turns until it finds it, sets the position from it, and then knows where centre is. Set it once here and the OpenFFBoard no longer needs centring by hand.</source>
+        <translation>Um encoder incremental conta a partir de onde estiver quando liga, então sem uma marca fixa o centro muda toda vez. O índice Z é essa marca: o eixo gira até achá-lo, define a posição a partir dele, e aí sabe onde é o centro. Configure uma vez aqui e o OpenFFBoard não precisa mais ser centralizado à mão.</translation>
+    </message>
+    <message>
+        <source>Current while moving:</source>
+        <translation>Corrente durante o movimento:</translation>
+    </message>
+    <message>
+        <source>Speed while moving:</source>
+        <translation>Velocidade durante o movimento:</translation>
+    </message>
+    <message>
+        <source>Enough to turn the wheel against its cogging, and no more. This is not your force feedback limit; the wheel may be moving with someone&apos;s hands on it.</source>
+        <translation>O suficiente para girar o volante contra o cogging, e nada além. Este não é o seu limite de force feedback; o volante pode estar se movendo com as mãos de alguém nele.</translation>
+    </message>
+    <message>
+        <source>Walking pace. The move is a trapezoidal profile, so it accelerates and stops smoothly rather than snapping to centre.</source>
+        <translation>Velocidade de caminhada. O movimento usa perfil trapezoidal, então acelera e para suavemente em vez de estalar até o centro.</translation>
+    </message>
+    <message>
+        <source>The wheel turns on its own for all three of these. Keep hands and cables clear.</source>
+        <translation>O volante gira sozinho nas três ações. Mantenha mãos e cabos livres.</translation>
+    </message>
+    <message>
+        <source>Set Current Position as Centre</source>
+        <translation>Definir Posição Atual como Centro</translation>
+    </message>
+    <message>
+        <source>Hold the wheel straight, then press. Stores how far this is from the index.</source>
+        <translation>Segure o volante reto e aperte. Guarda a distância daqui até o índice.</translation>
+    </message>
+    <message>
+        <source>Find Index and Centre Now</source>
+        <translation>Achar Índice e Centralizar Agora</translation>
+    </message>
+    <message>
+        <source>Runs the power-on sequence once, under its own current and speed limits, so you can watch it before letting it happen unattended.</source>
+        <translation>Executa a sequência de boot uma vez, com limites próprios de corrente e velocidade, para você assistir antes de deixar acontecer sozinho.</translation>
+    </message>
+    <message>
+        <source>Centre Automatically at Power-On</source>
+        <translation>Centralizar Sozinho ao Ligar</translation>
+    </message>
+    <message>
+        <source>Writes the startup settings so the axis does this by itself every time it powers up.</source>
+        <translation>Grava as configurações de boot para o eixo fazer isso sozinho toda vez que ligar.</translation>
+    </message>
+    <message>
+        <source>The OpenFFBoard switches the axis to torque control when it connects over CAN, so force feedback takes over once it has centred.</source>
+        <translation>O OpenFFBoard troca o eixo para controle de torque quando conecta por CAN, então o force feedback assume depois que ele centralizar.</translation>
+    </message>
+    <message>
+        <source>Connect to see the current centre.</source>
+        <translation>Conecte para ver o centro atual.</translation>
+    </message>
+    <message>
+        <source>It will find the index and move to centre at power-on.</source>
+        <translation>Ele vai achar o índice e ir para o centro ao ligar.</translation>
+    </message>
+    <message>
+        <source>Set Centre</source>
+        <translation>Definir Centro</translation>
+    </message>
+    <message>
+        <source>Centre At Power-On</source>
+        <translation>Centralizar ao Ligar</translation>
+    </message>
+    <message>
+        <source>From now on the wheel will turn on its own at every power-on: first to find the index, then to the centre.
+
+Make sure nothing is in its way and nobody is holding it when power comes on. Continue?</source>
+        <translation>De agora em diante o volante vai girar sozinho toda vez que ligar: primeiro para achar o índice, depois até o centro.
+
+Garanta que nada está no caminho e que ninguém está segurando quando a energia chegar. Continuar?</translation>
+    </message>
+    <message>
+        <source>Set {0} settings. Save the configuration to keep them.</source>
+        <translation>Gravadas {0} configurações. Salve a configuração para mantê-las.</translation>
+    </message>
+    <message>
+        <source>Find Index and Centre</source>
+        <translation>Achar Índice e Centralizar</translation>
+    </message>
+    <message>
+        <source>The index sets the position to zero (no offset in use).</source>
+        <translation>O índice define a posição como zero (nenhum offset em uso).</translation>
+    </message>
+    <message>
+        <source>Index Needed</source>
+        <translation>Índice Necessário</translation>
+    </message>
+    <message>
+        <source>encoder.config.use_index is off, so the encoder has no fixed mark and a centre stored now would mean something different after the next power-on.
+
+Turn it on, calibrate, then set the centre.</source>
+        <translation>encoder.config.use_index está desligado, então o encoder não tem marca fixa e um centro guardado agora significaria outra coisa na próxima vez que ligar.
+
+Ligue-o, calibre, e então defina o centro.</translation>
+    </message>
+    <message>
+        <source>Index Not Found</source>
+        <translation>Índice Não Encontrado</translation>
+    </message>
+    <message>
+        <source>The index has not been found since power-on, so the position is not referenced yet. Run the index search first, or use Find Index and Centre.</source>
+        <translation>O índice não foi encontrado desde que ligou, então a posição ainda não está referenciada. Rode a busca de índice antes, ou use Achar Índice e Centralizar.</translation>
+    </message>
+    <message>
+        <source>Position now: {0:+.4f} turns ({1:+.1f}°)</source>
+        <translation>Posição agora: {0:+.4f} voltas ({1:+.1f}°)</translation>
+    </message>
+    <message>
+        <source>It will NOT centre itself at power-on. Still to set: {0}.</source>
+        <translation>Ele NÃO vai se centralizar ao ligar. Falta configurar: {0}.</translation>
+    </message>
+    <message>
+        <source>Store the wheel&apos;s position right now as the centre?
+
+index_offset becomes {0:+.4f} turns. Hold the wheel straight before confirming.</source>
+        <translation>Guardar a posição atual do volante como o centro?
+
+O index_offset passa a ser {0:+.4f} voltas. Segure o volante reto antes de confirmar.</translation>
+    </message>
+    <message>
+        <source>Centre stored: index_offset {0:+.4f} turns. Save the configuration to keep it.</source>
+        <translation>Centro guardado: index_offset {0:+.4f} voltas. Salve a configuração para mantê-lo.</translation>
+    </message>
+    <message>
+        <source>This firmware does not carry: {0}</source>
+        <translation>Este firmware não possui: {0}</translation>
+    </message>
+    <message>
+        <source>The wheel will turn on its own: first to find the index, then to the centre.
+
+It runs at {0:.1f} A and up to {1:.2f} turns/s, not your force feedback limits, which are put back afterwards.
+
+Hands off the wheel. Continue?</source>
+        <translation>O volante vai girar sozinho: primeiro para achar o índice, depois até o centro.
+
+Roda com {0:.1f} A e até {1:.2f} voltas/s, não com seus limites de force feedback, que são devolvidos depois.
+
+Mãos longe do volante. Continuar?</translation>
+    </message>
+    <message>
+        <source>The index sets the position to {0:+.4f} turns.</source>
+        <translation>O índice define a posição como {0:+.4f} voltas.</translation>
+    </message>
+    <message>
+        <source>Could not read the encoder: {0}</source>
+        <translation>Não foi possível ler o encoder: {0}</translation>
+    </message>
+    <message>
+        <source>Could not write the centre: {0}</source>
+        <translation>Não foi possível gravar o centro: {0}</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
@@ -3804,6 +3964,85 @@ As configurações originais foram restauradas.</translation>
     <message>
         <source>The measurement is not repeating well enough to compare levels. The motor warming between them moves the magnets, and levels near the voltage limit are biased low. Let it cool, keep the top current well away from where the sweep fails, and prefer a single measurement at low current.</source>
         <translation>A medição não está repetindo bem o suficiente para comparar níveis. O motor aquecendo entre eles altera os ímãs, e níveis perto do limite de tensão saem enviesados para baixo. Deixe esfriar, mantenha a corrente máxima bem longe de onde a varredura falha, e prefira uma medição única em corrente baixa.</translation>
+    </message>
+</context>
+<context>
+    <name>CentringWorker</name>
+    <message>
+        <source>Turning to find the index...</source>
+        <translation>Girando para achar o índice...</translation>
+    </message>
+    <message>
+        <source>Moving to centre...</source>
+        <translation>Indo para o centro...</translation>
+    </message>
+    <message>
+        <source>Centred.</source>
+        <translation>Centralizado.</translation>
+    </message>
+    <message>
+        <source>This needs the Z index: encoder.config.use_index is off. Without it the encoder has no fixed mark to measure the centre from, and the position means something different after every power-on.</source>
+        <translation>Isto precisa do índice Z: encoder.config.use_index está desligado. Sem ele o encoder não tem marca fixa para medir o centro, e a posição significa algo diferente a cada vez que liga.</translation>
+    </message>
+    <message>
+        <source>Cancelled.</source>
+        <translation>Cancelado.</translation>
+    </message>
+    <message>
+        <source>Connection to the ODrive was lost.</source>
+        <translation>A conexão com a ODrive foi perdida.</translation>
+    </message>
+    <message>
+        <source>The index search failed:
+
+{0}</source>
+        <translation>A busca de índice falhou:
+
+{0}</translation>
+    </message>
+    <message>
+        <source>The index has not been found since power-on, so the position is not referenced to anything yet.</source>
+        <translation>O índice não foi encontrado desde que ligou, então a posição ainda não está referenciada a nada.</translation>
+    </message>
+    <message>
+        <source>The axis found the index and moved to centre, and is now idle.
+
+It ran at {0:.1f} A and up to {1:.1f} turns/s; your force feedback limits were put back untouched.</source>
+        <translation>O eixo achou o índice, foi até o centro e está em IDLE.
+
+Rodou com {0:.1f} A e até {1:.1f} voltas/s; seus limites de force feedback foram devolvidos intactos.</translation>
+    </message>
+    <message>
+        <source>The index search did not finish within {0:.0f} seconds. The Z channel may not be wired, or the shaft could not turn.</source>
+        <translation>A busca de índice não terminou em {0:.0f} segundos. O canal Z pode não estar ligado, ou o eixo não conseguiu girar.</translation>
+    </message>
+    <message>
+        <source>The axis refused to arm:
+
+{0}</source>
+        <translation>O eixo recusou armar:
+
+{0}</translation>
+    </message>
+    <message>
+        <source>no error was reported</source>
+        <translation>nenhum erro foi reportado</translation>
+    </message>
+    <message>
+        <source>Centring failed: {0}</source>
+        <translation>A centralização falhou: {0}</translation>
+    </message>
+    <message>
+        <source>The axis faulted while moving:
+
+{0}</source>
+        <translation>O eixo entrou em falha durante o movimento:
+
+{0}</translation>
+    </message>
+    <message>
+        <source>It did not reach centre within {0:.0f} seconds, stopping {1:.3f} turns away. The move current may be too low to overcome the cogging.</source>
+        <translation>Não chegou ao centro em {0:.0f} segundos, parando a {1:.3f} volta de distância. A corrente de movimento pode estar baixa demais para vencer o cogging.</translation>
     </message>
 </context>
 </TS>

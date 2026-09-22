@@ -12,9 +12,10 @@ from PySide6.QtWidgets import (
 import math
 
 from PySide6.QtCore import Qt, QEvent, QThread
+from odrive.enums import CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_TRAP_TRAJ
 
 from .base_tab import BaseTab
-from .tuning_workers import CalibrationQualityWorker
+from .tuning_workers import CalibrationQualityWorker, CentringWorker, resolve
 from app_config import AppColors
 
 # Rough per-point overhead for the idle/arm/disarm transitions around each measurement.
@@ -28,6 +29,8 @@ class AlignmentTab(BaseTab):
         super().__init__(main_window, parent)
         self.align_thread = None
         self.align_worker = None
+        self.centre_thread = None
+        self.centre_worker = None
         self._setup_ui()
         self.retranslate_ui()
 
@@ -130,7 +133,61 @@ class AlignmentTab(BaseTab):
         main_layout.addLayout(controls_row)
         main_layout.addWidget(self.progress_bar)
         main_layout.addWidget(self.status_label)
+        main_layout.addWidget(self._build_centre_group())
         main_layout.addStretch()
+
+    def _build_centre_group(self):
+        """The centre reference: where zero is, and whether the axis drives there itself."""
+        self.centre_group = QGroupBox()
+        layout = QVBoxLayout(self.centre_group)
+
+        self.centre_help = QLabel()
+        self.centre_help.setWordWrap(True)
+        layout.addWidget(self.centre_help)
+
+        self.centre_status = QLabel()
+        self.centre_status.setWordWrap(True)
+        self.centre_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.centre_status)
+
+        form = QFormLayout()
+        self.move_current_input = QDoubleSpinBox()
+        self.move_current_input.setRange(0.5, 30.0)
+        self.move_current_input.setDecimals(1)
+        self.move_current_input.setValue(6.0)
+        self.move_current_input.setSuffix(" A")
+        self.move_speed_input = QDoubleSpinBox()
+        self.move_speed_input.setRange(0.1, 3.0)
+        self.move_speed_input.setDecimals(2)
+        self.move_speed_input.setValue(0.50)
+        self.move_speed_input.setSuffix(" turns/s")
+        self.label_move_current, self.label_move_speed = QLabel(), QLabel()
+        form.addRow(self.label_move_current, self.move_current_input)
+        form.addRow(self.label_move_speed, self.move_speed_input)
+        layout.addLayout(form)
+
+        self.centre_warning = QLabel()
+        self.centre_warning.setWordWrap(True)
+        self.centre_warning.setStyleSheet(f"color: {AppColors.WARNING}; font-weight: bold;")
+        layout.addWidget(self.centre_warning)
+
+        buttons = QHBoxLayout()
+        self.mark_centre_btn = QPushButton()
+        self.mark_centre_btn.clicked.connect(self.mark_current_as_centre)
+        self.goto_centre_btn = QPushButton()
+        self.goto_centre_btn.clicked.connect(self.go_to_centre)
+        self.autocentre_btn = QPushButton()
+        self.autocentre_btn.clicked.connect(self.enable_autocentre)
+        for widget in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+            buttons.addWidget(widget)
+        buttons.addStretch()
+        layout.addLayout(buttons)
+
+        self.centre_result = QLabel()
+        self.centre_result.setWordWrap(True)
+        self.centre_result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.centre_result)
+        return self.centre_group
 
     def retranslate_ui(self):
         """Updates all translatable texts in this tab."""
@@ -142,6 +199,33 @@ class AlignmentTab(BaseTab):
             "the square root of the number of runs. It uses the native calibration exactly as it "
             "is; it just does not trust any single roll of it."
         ))
+        self.centre_group.setTitle(self.tr("Centre Reference"))
+        self.centre_help.setText(self.tr(
+            "An incremental encoder counts from wherever it happens to be at power-on, so "
+            "without a fixed mark the centre moves every time. The Z index is that mark: the "
+            "axis turns until it finds it, sets the position from it, and then knows where "
+            "centre is. Set it once here and the OpenFFBoard no longer needs centring by hand."))
+        self.label_move_current.setText(self.tr("Current while moving:"))
+        self.label_move_speed.setText(self.tr("Speed while moving:"))
+        self.move_current_input.setToolTip(self.tr(
+            "Enough to turn the wheel against its cogging, and no more. This is not your force "
+            "feedback limit; the wheel may be moving with someone's hands on it."))
+        self.move_speed_input.setToolTip(self.tr(
+            "Walking pace. The move is a trapezoidal profile, so it accelerates and stops "
+            "smoothly rather than snapping to centre."))
+        self.centre_warning.setText(self.tr(
+            "The wheel turns on its own for all three of these. Keep hands and cables clear."))
+        self.mark_centre_btn.setText(self.tr("Set Current Position as Centre"))
+        self.mark_centre_btn.setToolTip(self.tr(
+            "Hold the wheel straight, then press. Stores how far this is from the index."))
+        self.goto_centre_btn.setText(self.tr("Find Index and Centre Now"))
+        self.goto_centre_btn.setToolTip(self.tr(
+            "Runs the power-on sequence once, under its own current and speed limits, so you "
+            "can watch it before letting it happen unattended."))
+        self.autocentre_btn.setText(self.tr("Centre Automatically at Power-On"))
+        self.autocentre_btn.setToolTip(self.tr(
+            "Writes the startup settings so the axis does this by itself every time it powers up."))
+        self.refresh_centre_status()
         self.params_group.setTitle(self.tr("Check Parameters"))
         self.label_runs.setText(self.tr("Calibrations to average:"))
         self.apply_check.setText(self.tr("Write the average to the board (off = measure only)"))
@@ -162,6 +246,230 @@ class AlignmentTab(BaseTab):
         self.restore_scan_btn.setText(self.tr("Restore Default Scan"))
         self.restore_scan_btn.setToolTip(self.tr("Puts calib_scan_distance back to the firmware default of 16*pi electrical radians."))
         self._update_estimate()
+
+
+    # ------------------------------------------------------------- centre / zero ---
+
+    # What closed loop resumes into at power-on. ODrive has no startup state that moves
+    # to a position (startup_homing wants a real endstop on a GPIO, which a wheel has
+    # not got), but it does restore the saved control mode when it arms, so an axis
+    # saved in position control with input_pos at zero drives itself to centre. The
+    # OpenFFBoard then switches it to torque control over CAN when it connects, and
+    # force feedback takes over from there.
+    AUTOCENTRE_SETTINGS = [
+        ('axis0.config.startup_encoder_index_search', True),
+        ('axis0.config.startup_closed_loop_control', True),
+        ('axis0.controller.config.control_mode', CONTROL_MODE_POSITION_CONTROL),
+        ('axis0.controller.config.input_mode', INPUT_MODE_TRAP_TRAJ),
+        ('axis0.controller.input_pos', 0.0),
+        ('axis0.encoder.config.use_index', True),
+        ('axis0.encoder.config.use_index_offset', True),
+        ('axis0.encoder.config.pre_calibrated', True),
+        ('axis0.motor.config.pre_calibrated', True),
+    ]
+
+    def _centre_reference(self, odrv):
+        """
+        Returns the position the axis is given when the index is found, in turns.
+
+        With use_index_offset off the firmware sets zero there, whatever index_offset
+        happens to hold, so reading the stored number in that case would measure the
+        centre against a reference the board is not actually using.
+        """
+        try:
+            if not bool(odrv.axis0.encoder.config.use_index_offset):
+                return 0.0
+            return float(odrv.axis0.encoder.config.index_offset)
+        except Exception:
+            return 0.0
+
+    def refresh_centre_status(self):
+        """Describes where zero is and whether the axis will centre itself at power-on."""
+        odrv = self._quiet_odrv()
+        if odrv is None:
+            self.centre_status.setText(self.tr("Connect to see the current centre."))
+            self.centre_status.setStyleSheet("")
+            for button in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+                button.setEnabled(False)
+            return
+
+        busy = self.align_thread is not None or self.centre_thread is not None
+        for button in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+            button.setEnabled(not busy)
+
+        lines, missing = [], []
+        try:
+            position = float(odrv.axis0.encoder.pos_estimate)
+            lines.append(self.tr("Position now: {0:+.4f} turns ({1:+.1f}°)").format(
+                position, position * 360.0))
+        except Exception:
+            pass
+        try:
+            if bool(odrv.axis0.encoder.config.use_index_offset):
+                lines.append(self.tr("The index sets the position to {0:+.4f} turns.").format(
+                    float(odrv.axis0.encoder.config.index_offset)))
+            else:
+                lines.append(self.tr("The index sets the position to zero (no offset in use)."))
+        except Exception:
+            pass
+
+        for path, wanted in self.AUTOCENTRE_SETTINGS:
+            if path == 'axis0.controller.input_pos':
+                continue
+            owner, attr = resolve(odrv, path)
+            if owner is None:
+                continue
+            try:
+                actual = getattr(owner, attr)
+                matches = (bool(actual) == wanted) if isinstance(wanted, bool) else (actual == wanted)
+                if not matches:
+                    # Two of these are called pre_calibrated, one on the encoder and one
+                    # on the motor, so the leaf alone lists the same word twice. Dropping
+                    # the parts every path shares leaves what tells them apart.
+                    missing.append(".".join(
+                        part for part in path.split('.') if part not in ('axis0', 'config')))
+            except Exception:
+                continue
+
+        if missing:
+            lines.append(self.tr("It will NOT centre itself at power-on. Still to set: {0}.")
+                         .format(", ".join(missing)))
+            self.centre_status.setStyleSheet(f"color: {AppColors.WARNING};")
+        else:
+            lines.append(self.tr("It will find the index and move to centre at power-on."))
+            self.centre_status.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.centre_status.setText("\n".join(lines))
+
+    def _quiet_odrv(self):
+        """The ODrive if connected, without the status-bar complaint get_odrv() makes."""
+        if self.main_window.is_connected and self.main_window.odrv_proxy:
+            return self.main_window.odrv_proxy.odrv
+        return None
+
+    def mark_current_as_centre(self):
+        """Stores wherever the wheel is now as the position the index should report."""
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        try:
+            if not bool(odrv.axis0.encoder.config.use_index):
+                QMessageBox.warning(self, self.tr("Index Needed"), self.tr(
+                    "encoder.config.use_index is off, so the encoder has no fixed mark and a "
+                    "centre stored now would mean something different after the next power-on.\n\n"
+                    "Turn it on, calibrate, then set the centre."))
+                return
+            if not bool(odrv.axis0.encoder.index_found):
+                QMessageBox.warning(self, self.tr("Index Not Found"), self.tr(
+                    "The index has not been found since power-on, so the position is not "
+                    "referenced yet. Run the index search first, or use Find Index and Centre."))
+                return
+            position = float(odrv.axis0.encoder.pos_estimate)
+            # The offset is what the index must report so that here reads zero: whatever
+            # it reports today, less how far the shaft has come since.
+            new_offset = self._centre_reference(odrv) - position
+        except Exception as e:
+            QMessageBox.critical(self, self.tr("Error"), self.tr(
+                "Could not read the encoder: {0}").format(e))
+            return
+
+        if QMessageBox.question(self, self.tr("Set Centre"), self.tr(
+                "Store the wheel's position right now as the centre?\n\n"
+                "index_offset becomes {0:+.4f} turns. Hold the wheel straight before "
+                "confirming.").format(new_offset),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                ) != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            odrv.axis0.encoder.config.index_offset = new_offset
+            odrv.axis0.encoder.config.use_index_offset = True
+            self.centre_result.setText(self.tr(
+                "Centre stored: index_offset {0:+.4f} turns. Save the configuration to keep it.")
+                .format(new_offset))
+            self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        except Exception as e:
+            self.centre_result.setText(self.tr("Could not write the centre: {0}").format(e))
+            self.centre_result.setStyleSheet(f"color: {AppColors.ERROR};")
+        self.refresh_centre_status()
+
+    def enable_autocentre(self):
+        """Writes the settings that make the axis centre itself at every power-on."""
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        if QMessageBox.question(self, self.tr("Centre At Power-On"), self.tr(
+                "From now on the wheel will turn on its own at every power-on: first to find "
+                "the index, then to the centre.\n\n"
+                "Make sure nothing is in its way and nobody is holding it when power comes on. "
+                "Continue?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                ) != QMessageBox.StandardButton.Yes:
+            return
+
+        written, skipped = [], []
+        for path, value in self.AUTOCENTRE_SETTINGS:
+            owner, attr = resolve(odrv, path)
+            if owner is None:
+                skipped.append(path)
+                continue
+            try:
+                setattr(owner, attr, value)
+                written.append(attr)
+            except Exception:
+                skipped.append(path)
+
+        message = self.tr("Set {0} settings. Save the configuration to keep them.").format(len(written))
+        if skipped:
+            message += "\n" + self.tr("This firmware does not carry: {0}").format(", ".join(skipped))
+        message += "\n\n" + self.tr(
+            "The OpenFFBoard switches the axis to torque control when it connects over CAN, so "
+            "force feedback takes over once it has centred.")
+        self.centre_result.setText(message)
+        self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.refresh_centre_status()
+
+    def go_to_centre(self):
+        """Runs the power-on sequence now, so it can be watched before it runs unattended."""
+        odrv = self.get_odrv()
+        if not odrv or self.centre_thread is not None:
+            return
+        if QMessageBox.question(self, self.tr("Find Index and Centre"), self.tr(
+                "The wheel will turn on its own: first to find the index, then to the centre.\n\n"
+                "It runs at {0:.1f} A and up to {1:.2f} turns/s, not your force feedback limits, "
+                "which are put back afterwards.\n\nHands off the wheel. Continue?").format(
+                    self.move_current_input.value(), self.move_speed_input.value()),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                ) != QMessageBox.StandardButton.Yes:
+            return
+
+        self.progress_bar.setValue(0)
+        self.centre_result.setText("")
+        self.centre_worker = CentringWorker(odrv, self.move_current_input.value(),
+                                            self.move_speed_input.value())
+        self.centre_thread = QThread()
+        self.centre_worker.moveToThread(self.centre_thread)
+        self.centre_worker.progress.connect(self._on_centre_progress)
+        self.centre_worker.result.connect(self._on_centre_result)
+        self.centre_worker.finished.connect(self.centre_thread.quit)
+        self.centre_thread.started.connect(self.centre_worker.run)
+        self.centre_thread.finished.connect(self._on_centre_thread_finished)
+        self.refresh_centre_status()
+        self.centre_thread.start()
+
+    def _on_centre_progress(self, message, percent):
+        self.status_label.setText(message)
+        self.progress_bar.setValue(percent)
+
+    def _on_centre_result(self, success, message):
+        self.centre_result.setText(message)
+        self.centre_result.setStyleSheet(
+            f"color: {AppColors.SUCCESS};" if success else f"color: {AppColors.ERROR};")
+
+    def _on_centre_thread_finished(self):
+        self.centre_thread = None
+        self.centre_worker = None
+        self.progress_bar.setValue(0)
+        self.refresh_centre_status()
 
     def _update_estimate(self):
         """
@@ -372,8 +680,8 @@ class AlignmentTab(BaseTab):
     # ------------------------------------------------------------ BaseTab ---
 
     def populate_fields(self):
-        """Nothing to load: the sweep reads what it needs when it runs."""
-        pass
+        """The sweep reads what it needs when it runs; the centre panel reflects the board."""
+        self.refresh_centre_status()
 
     def apply_config(self):
         """The sweep writes the offset itself; there is no separate apply step."""

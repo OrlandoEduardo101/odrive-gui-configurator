@@ -24,6 +24,7 @@ from odrive.enums import AXIS_STATE_ENCODER_OFFSET_CALIBRATION, AXIS_STATE_ENCOD
 from odrive.enums import CONTROL_MODE_VELOCITY_CONTROL, INPUT_MODE_VEL_RAMP
 from odrive.enums import CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH
 from odrive.enums import AXIS_STATE_LOCKIN_SPIN
+from odrive.enums import CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_TRAP_TRAJ
 
 
 
@@ -48,6 +49,22 @@ def modulator_ceiling(vbus_voltage):
     return MODULATION_LIMIT * (2.0 / 3.0) * float(vbus_voltage)
 
 
+
+def resolve(root, path):
+    """
+    Walks a dotted property path. Returns (owner, attribute) when it exists on this
+    board, or (None, None) when the firmware does not carry it.
+    """
+    parts = path.split('.')
+    obj = root
+    try:
+        for part in parts[:-1]:
+            obj = getattr(obj, part)
+        if hasattr(obj, parts[-1]):
+            return obj, parts[-1]
+    except Exception:
+        pass
+    return None, None
 
 def decode_error(value, prefix):
     """
@@ -1346,6 +1363,200 @@ class SaturationSweepWorker(QObject):
         finally:
             try:
                 self.odrv.axis0.requested_state = AXIS_STATE_IDLE
+            except Exception:
+                pass
+            self.finished.emit()
+
+
+class CentringWorker(QObject):
+    """
+    Finds the encoder index and then drives the axis to the stored centre.
+
+    ODrive has no startup state that moves to a position: startup_homing needs a real
+    endstop on a GPIO, which a steering wheel does not have. What it does have is a
+    saved control mode that closed loop resumes into, so an axis configured for position
+    control with input_pos at zero drives itself to centre the moment it arms. This
+    worker performs that same sequence on demand so it can be tried, and watched, before
+    it is set to happen unattended at power-on.
+
+    A direct drive wheel is strong enough to hurt someone, so the move runs on its own
+    limits rather than the ones tuned for force feedback: a fraction of the current and
+    a trapezoidal profile with a walking-pace velocity. Everything touched is put back
+    afterwards, including on failure.
+    """
+
+    progress = Signal(str, int)
+    result = Signal(bool, str)
+    finished = Signal()
+
+    ARRIVAL_TURNS = 0.01        # within a hundredth of a turn is centred
+    ARRIVAL_SETTLE_S = 0.4      # and it has to stay there, not just pass through
+    MOVE_TIMEOUT_S = 25.0
+    INDEX_TIMEOUT_S = 25.0
+
+    SAVED_PATHS = [
+        ('control_mode', ('controller', 'config', 'control_mode')),
+        ('input_mode', ('controller', 'config', 'input_mode')),
+        ('current_lim', ('motor', 'config', 'current_lim')),
+        ('vel_limit', ('trap_traj', 'config', 'vel_limit')),
+        ('accel_limit', ('trap_traj', 'config', 'accel_limit')),
+        ('decel_limit', ('trap_traj', 'config', 'decel_limit')),
+        ('inertia', ('controller', 'config', 'inertia')),
+    ]
+
+    def __init__(self, odrv, move_current, move_velocity, search_index=True):
+        super().__init__()
+        self.odrv = odrv
+        self.move_current = move_current
+        self.move_velocity = move_velocity
+        self.search_index = search_index
+        self._is_running = True
+        self._saved = {}
+
+    def stop(self):
+        self._is_running = False
+
+    def _save_state(self, axis):
+        for key, path in self.SAVED_PATHS:
+            owner = axis
+            try:
+                for part in path[:-1]:
+                    owner = getattr(owner, part)
+                self._saved[key] = getattr(owner, path[-1])
+            except Exception:
+                continue
+
+    def _restore_state(self, axis):
+        for key, path in self.SAVED_PATHS:
+            if key not in self._saved:
+                continue
+            try:
+                owner = axis
+                for part in path[:-1]:
+                    owner = getattr(owner, part)
+                setattr(owner, path[-1], self._saved[key])
+            except Exception:
+                continue
+
+    def _find_index(self, axis):
+        self.progress.emit(QCoreApplication.translate(
+            "CentringWorker", "Turning to find the index..."), 10)
+        axis.error = 0
+        axis.motor.error = 0
+        axis.encoder.error = 0
+        axis.controller.error = 0
+        axis.requested_state = AXIS_STATE_ENCODER_INDEX_SEARCH
+        time.sleep(0.3)
+        deadline = time.time() + self.INDEX_TIMEOUT_S
+        while axis.current_state == AXIS_STATE_ENCODER_INDEX_SEARCH:
+            if not self._is_running:
+                axis.requested_state = AXIS_STATE_IDLE
+                raise InterruptedError
+            if time.time() > deadline:
+                axis.requested_state = AXIS_STATE_IDLE
+                raise RuntimeError(QCoreApplication.translate(
+                    "CentringWorker",
+                    "The index search did not finish within {0:.0f} seconds. The Z channel may "
+                    "not be wired, or the shaft could not turn.").format(self.INDEX_TIMEOUT_S))
+            time.sleep(0.1)
+        if axis.error != 0:
+            raise RuntimeError(QCoreApplication.translate(
+                "CentringWorker", "The index search failed:\n\n{0}").format(
+                    describe_axis_error(axis) or hex(axis.error)))
+
+    def run(self):
+        axis = self.odrv.axis0
+        try:
+            if not bool(axis.encoder.config.use_index):
+                raise RuntimeError(QCoreApplication.translate(
+                    "CentringWorker",
+                    "This needs the Z index: encoder.config.use_index is off. Without it the "
+                    "encoder has no fixed mark to measure the centre from, and the position "
+                    "means something different after every power-on."))
+
+            self._save_state(axis)
+
+            if self.search_index:
+                self._find_index(axis)
+            elif not bool(axis.encoder.index_found):
+                raise RuntimeError(QCoreApplication.translate(
+                    "CentringWorker",
+                    "The index has not been found since power-on, so the position is not "
+                    "referenced to anything yet."))
+
+            # The move gets its own limits. Force feedback settings are chosen to be
+            # strong, and strong is the wrong thing for a wheel moving on its own with
+            # someone's hands possibly on it.
+            self.progress.emit(QCoreApplication.translate(
+                "CentringWorker", "Moving to centre..."), 55)
+            axis.motor.config.current_lim = float(self.move_current)
+            axis.trap_traj.config.vel_limit = float(self.move_velocity)
+            axis.trap_traj.config.accel_limit = float(self.move_velocity) * 2.0
+            axis.trap_traj.config.decel_limit = float(self.move_velocity) * 2.0
+            axis.controller.config.inertia = 0.0
+            axis.controller.config.control_mode = CONTROL_MODE_POSITION_CONTROL
+            axis.controller.config.input_mode = INPUT_MODE_TRAP_TRAJ
+            axis.controller.input_pos = 0.0
+
+            axis.error = 0
+            axis.motor.error = 0
+            axis.encoder.error = 0
+            axis.controller.error = 0
+            axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+            time.sleep(0.3)
+            if axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
+                raise RuntimeError(QCoreApplication.translate(
+                    "CentringWorker", "The axis refused to arm:\n\n{0}").format(
+                        describe_axis_error(axis) or QCoreApplication.translate(
+                            "CentringWorker", "no error was reported")))
+
+            deadline = time.time() + self.MOVE_TIMEOUT_S
+            settled_since = None
+            while True:
+                if not self._is_running:
+                    raise InterruptedError
+                if axis.error != 0:
+                    raise RuntimeError(QCoreApplication.translate(
+                        "CentringWorker", "The axis faulted while moving:\n\n{0}").format(
+                            describe_axis_error(axis) or hex(axis.error)))
+                position = float(axis.encoder.pos_estimate)
+                if abs(position) <= self.ARRIVAL_TURNS:
+                    settled_since = settled_since or time.time()
+                    if time.time() - settled_since >= self.ARRIVAL_SETTLE_S:
+                        break
+                else:
+                    settled_since = None
+                if time.time() > deadline:
+                    raise RuntimeError(QCoreApplication.translate(
+                        "CentringWorker",
+                        "It did not reach centre within {0:.0f} seconds, stopping {1:.3f} turns "
+                        "away. The move current may be too low to overcome the cogging.").format(
+                            self.MOVE_TIMEOUT_S, position))
+                time.sleep(0.05)
+
+            axis.requested_state = AXIS_STATE_IDLE
+            self.progress.emit(QCoreApplication.translate(
+                "CentringWorker", "Centred."), 100)
+            self.result.emit(True, QCoreApplication.translate(
+                "CentringWorker",
+                "The axis found the index and moved to centre, and is now idle.\n\n"
+                "It ran at {0:.1f} A and up to {1:.1f} turns/s; your force feedback limits were "
+                "put back untouched.").format(self.move_current, self.move_velocity))
+
+        except InterruptedError:
+            self.result.emit(False, QCoreApplication.translate(
+                "CentringWorker", "Cancelled."))
+        except fibre.protocol.ChannelBrokenException:
+            self.result.emit(False, QCoreApplication.translate(
+                "CentringWorker", "Connection to the ODrive was lost."))
+        except Exception as e:
+            self.result.emit(False, QCoreApplication.translate(
+                "CentringWorker", "Centring failed: {0}").format(e))
+        finally:
+            try:
+                axis.requested_state = AXIS_STATE_IDLE
+                time.sleep(0.1)
+                self._restore_state(axis)
             except Exception:
                 pass
             self.finished.emit()

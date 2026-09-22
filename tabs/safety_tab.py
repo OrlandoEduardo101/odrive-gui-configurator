@@ -15,24 +15,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QEvent
 
 from .base_tab import BaseTab
+from .tuning_workers import resolve
 from app_config import AppColors, AppMessages
-
-
-def resolve(root, path):
-    """
-    Walks a dotted property path. Returns (owner, attribute) when it exists on this
-    board, or (None, None) when the firmware does not carry it.
-    """
-    parts = path.split('.')
-    obj = root
-    try:
-        for part in parts[:-1]:
-            obj = getattr(obj, part)
-        if hasattr(obj, parts[-1]):
-            return obj, parts[-1]
-    except Exception:
-        pass
-    return None, None
 
 
 class SafetyTab(BaseTab):
