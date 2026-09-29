@@ -3858,6 +3858,10 @@ As configurações originais foram restauradas.</translation>
         <source>This ran at {0:.1f} A while the motor is configured for {1:.1f} A. That means the encoder did not turn as far as the commanded angle, which a current too low to pull the rotor out of its cogging detents will do. Try again at the board&apos;s own current.</source>
         <translation>Isto rodou com {0:.1f} A enquanto o motor está configurado para {1:.1f} A. Significa que o encoder não girou tanto quanto o ângulo comandado, que é o que acontece quando a corrente é baixa demais para tirar o rotor dos detents de cogging. Tente de novo com a corrente da própria placa.</translation>
     </message>
+    <message>
+        <source>What that is worth: torque follows the cosine of the commutation error, so one run alone costs about {0:.2f}% of torque here and the average about {1:.2f}%. If you are happy with the board&apos;s own calibration, that difference is what you are giving up.</source>
+        <translation>Quanto isso vale: o torque segue o cosseno do erro de comutação, então uma execução sozinha custa cerca de {0:.2f}% de torque aqui, e a média cerca de {1:.2f}%. Se você está satisfeito com a calibração da própria placa, essa diferença é o que você abre mão.</translation>
+    </message>
 </context>
 <context>
     <name>SaturationSweepWorker</name>

@@ -221,6 +221,33 @@ class CalibrationQualityWorker(QObject):
         time.sleep(0.2)
         return int(getattr(axis.encoder.config, self._offset_attr))
 
+
+    def _write_offset(self, axis, mean_counts):
+        """
+        Writes the averaged offset as the pair the firmware keeps it in.
+
+        Commutation in fw-v0.5.6 reads both halves. encoder.cpp:812 subtracts the
+        integer phase_offset from the count, and encoder.cpp:834 subtracts
+        phase_offset_float from the interpolated result, so the offset actually applied
+        is the sum of the two. run_offset_calibration produces them together:
+
+            config_.phase_offset = encvaluesum / num_steps;
+            residual = encvaluesum - phase_offset * num_steps;
+            config_.phase_offset_float = (float)residual / num_steps + 0.5f;
+
+        Writing only the integer left the fraction behind from whichever run happened to
+        go last, so the pair no longer described one measurement. The error is under a
+        count and costs little torque, but it is a value this code had no business
+        leaving inconsistent, and a fractional average is exactly what the float is for.
+        """
+        whole = int(mean_counts)          # toward zero, as the firmware's integer division
+        setattr(axis.encoder.config, self._offset_attr, whole)
+        if hasattr(axis.encoder.config, 'phase_offset_float'):
+            try:
+                axis.encoder.config.phase_offset_float = float(mean_counts - whole) + 0.5
+            except Exception:
+                pass
+
     def _series(self, label, base_pct):
         """
         Runs the calibration, discarding the first result, and returns the rest.
@@ -281,6 +308,18 @@ class CalibrationQualityWorker(QObject):
         gaps = [(ordered[(i + 1) % len(ordered)] - ordered[i]) % period
                 for i in range(len(ordered))]
         return period - max(gaps)
+
+    @staticmethod
+    def _wrap_to(value, period):
+        """
+        Brings a difference into [-period/2, +period/2).
+
+        Offsets live on a circle, so a run 10 counts below the mean and one a whole
+        revolution above it are the same distance away. Subtracting without wrapping
+        would count the second as enormous and inflate the spread.
+        """
+        half = period / 2.0
+        return ((value + half) % period) - half
 
     @staticmethod
     def _circular_mean(values, period):
@@ -353,6 +392,15 @@ class CalibrationQualityWorker(QObject):
             reduced = self._reduce(offsets, period)
             spread = self._circular_spread(reduced, period)
             mean = self._circular_mean(reduced, period)
+            # Spread of one run about the mean, which is what a single calibration would
+            # have been off by. The peak-to-peak figure above answers a different
+            # question and would overstate this one.
+            if len(reduced) > 1:
+                centred = [self._wrap_to(value - mean, period) for value in reduced]
+                reduced_spread_sd = math.sqrt(
+                    sum(v * v for v in centred) / (len(centred) - 1))
+            else:
+                reduced_spread_sd = 0.0
 
             lines = [
                 QCoreApplication.translate("CalibrationQualityWorker",
@@ -385,6 +433,20 @@ class CalibrationQualityWorker(QObject):
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
                 "Average of all {0}: offset {1}. Averaging random scatter tightens it by about "
                 "{2:.1f} times.").format(self.runs, round(mean), improvement))
+
+            # Torque follows the cosine of the commutation error, which is very flat near
+            # zero, so a few electrical degrees cost almost nothing. Saying so lets the
+            # reader decide this is not worth four calibrations, instead of assuming a
+            # tighter number must matter.
+            single_deg = to_degrees(reduced_spread_sd) if reduced_spread_sd else 0.0
+            averaged_deg = single_deg / improvement if improvement else single_deg
+            single_loss = (1.0 - math.cos(math.radians(single_deg))) * 100.0
+            averaged_loss = (1.0 - math.cos(math.radians(averaged_deg))) * 100.0
+            lines.append(QCoreApplication.translate("CalibrationQualityWorker",
+                "What that is worth: torque follows the cosine of the commutation error, so one "
+                "run alone costs about {0:.2f}% of torque here and the average about {1:.2f}%. "
+                "If you are happy with the board's own calibration, that difference is what you "
+                "are giving up.").format(single_loss, averaged_loss))
             lines.append("")
             lines.append(QCoreApplication.translate("CalibrationQualityWorker",
                 "An offset only survives a reboot when the encoder uses the Z index with "
@@ -420,7 +482,7 @@ class CalibrationQualityWorker(QObject):
                     "run would drag it away from the good ones. Recalibrate from the Encoder tab "
                     "instead.").format(to_degrees(spread)))
             else:
-                setattr(axis.encoder.config, self._offset_attr, int(round(mean)))
+                self._write_offset(axis, mean)
                 lines.append("")
                 lines.append(QCoreApplication.translate("CalibrationQualityWorker",
                     "Applied. Save the configuration to keep it."))
