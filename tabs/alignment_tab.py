@@ -298,11 +298,14 @@ class AlignmentTab(BaseTab):
         buttons = QHBoxLayout()
         self.mark_centre_btn = QPushButton()
         self.mark_centre_btn.clicked.connect(self.mark_current_as_centre)
+        self.clear_centre_btn = QPushButton()
+        self.clear_centre_btn.clicked.connect(self.clear_centre)
         self.goto_centre_btn = QPushButton()
         self.goto_centre_btn.clicked.connect(self.go_to_centre)
         self.autocentre_btn = QPushButton()
         self.autocentre_btn.clicked.connect(self.enable_autocentre)
-        for widget in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+        for widget in (self.mark_centre_btn, self.clear_centre_btn,
+                       self.goto_centre_btn, self.autocentre_btn):
             buttons.addWidget(widget)
         buttons.addStretch()
         layout.addLayout(buttons)
@@ -378,6 +381,10 @@ class AlignmentTab(BaseTab):
         self.mark_centre_btn.setText(self.tr("Set Current Position as Centre"))
         self.mark_centre_btn.setToolTip(self.tr(
             "Hold the wheel straight, then press. Stores how far this is from the index."))
+        self.clear_centre_btn.setText(self.tr("Clear Stored Centre"))
+        self.clear_centre_btn.setToolTip(self.tr(
+            "Forgets the centre and puts the index back to setting the position to zero, which "
+            "is what the board does on its own."))
         self.goto_centre_btn.setText(self.tr("Find Index and Centre Now"))
         self.goto_centre_btn.setToolTip(self.tr(
             "Runs the power-on sequence once, under its own current and speed limits, so you "
@@ -698,12 +705,14 @@ class AlignmentTab(BaseTab):
             self._centre_lines = []
             self.centre_status.setText(self.tr("Connect to see the current centre."))
             self.centre_status.setStyleSheet("")
-            for button in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+            for button in (self.mark_centre_btn, self.clear_centre_btn,
+                           self.goto_centre_btn, self.autocentre_btn):
                 button.setEnabled(False)
             return
 
         busy = self.align_thread is not None or self.centre_thread is not None
-        for button in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
+        for button in (self.mark_centre_btn, self.clear_centre_btn,
+                       self.goto_centre_btn, self.autocentre_btn):
             button.setEnabled(not busy)
 
         lines, missing = [], []
@@ -850,6 +859,47 @@ class AlignmentTab(BaseTab):
         self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
         self.refresh_centre_status()
 
+
+
+    def clear_centre(self):
+        """
+        Forgets the stored centre, putting the index back to setting position to zero.
+
+        Standing the power-on move down at the same time is not tidiness: with no stored
+        centre the move would drive to wherever the index happens to sit, which is not
+        the middle of the wheel and is no safer for being arbitrary.
+        """
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        armed = getattr(self, '_autocentre_armed', False)
+        message = self.tr(
+            "Forget the stored centre?\n\nThe index will go back to setting the position to "
+            "zero wherever it happens to sit, which is the board's own behaviour.")
+        if armed:
+            message += "\n\n" + self.tr(
+                "Centring at power-on will be turned off with it, because without a stored "
+                "centre it would drive to the index instead of to the middle of the wheel.")
+        if QMessageBox.question(self, self.tr("Clear Centre"), message,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                                ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            odrv.axis0.encoder.config.use_index_offset = False
+            odrv.axis0.encoder.config.index_offset = 0.0
+            if armed:
+                odrv.axis0.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
+                odrv.axis0.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+        except Exception as e:
+            self.centre_result.setText(self.tr("Could not clear the centre: {0}").format(e))
+            self.centre_result.setStyleSheet(f"color: {AppColors.ERROR};")
+            return
+        text = self.tr("The stored centre is gone; the index sets the position to zero again.")
+        if armed:
+            text += " " + self.tr("Centring at power-on was turned off with it.")
+        self.centre_result.setText(text + " " + self.tr("Save the configuration to keep this."))
+        self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.refresh_centre_status()
 
     def disable_autocentre(self, odrv):
         """

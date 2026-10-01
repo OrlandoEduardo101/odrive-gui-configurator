@@ -3047,6 +3047,46 @@ A próxima não terá com o que ser comparada, então a deriva que denuncia um m
         <source>Cleared {0} recorded calibrations.</source>
         <translation>Limpas {0} calibrações registradas.</translation>
     </message>
+    <message>
+        <source>Clear Stored Centre</source>
+        <translation>Limpar Centro Guardado</translation>
+    </message>
+    <message>
+        <source>Forgets the centre and puts the index back to setting the position to zero, which is what the board does on its own.</source>
+        <translation>Esquece o centro e devolve ao índice o comportamento de zerar a posição, que é o que a placa faz sozinha.</translation>
+    </message>
+    <message>
+        <source>Clear Centre</source>
+        <translation>Limpar Centro</translation>
+    </message>
+    <message>
+        <source>Forget the stored centre?
+
+The index will go back to setting the position to zero wherever it happens to sit, which is the board&apos;s own behaviour.</source>
+        <translation>Esquecer o centro guardado?
+
+O índice volta a zerar a posição onde quer que ele esteja, que é o comportamento próprio da placa.</translation>
+    </message>
+    <message>
+        <source>Centring at power-on will be turned off with it, because without a stored centre it would drive to the index instead of to the middle of the wheel.</source>
+        <translation>A centralização ao ligar será desligada junto, porque sem um centro guardado ela iria até o índice em vez do meio do volante.</translation>
+    </message>
+    <message>
+        <source>Could not clear the centre: {0}</source>
+        <translation>Não foi possível limpar o centro: {0}</translation>
+    </message>
+    <message>
+        <source>The stored centre is gone; the index sets the position to zero again.</source>
+        <translation>O centro guardado foi apagado; o índice volta a zerar a posição.</translation>
+    </message>
+    <message>
+        <source>Centring at power-on was turned off with it.</source>
+        <translation>A centralização ao ligar foi desligada junto.</translation>
+    </message>
+    <message>
+        <source>Save the configuration to keep this.</source>
+        <translation>Salve a configuração para manter isso.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
