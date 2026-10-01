@@ -529,8 +529,19 @@ class AlignmentTab(BaseTab):
                     "Could not read the motor configuration from the board."))
             return
         previous = calibration_log.load()
+        last = previous[-1] if previous else None
+        if calibration_log.same_reading(last, entry):
+            # Nothing changed on the board, so there is nothing new to record. The check
+            # records on its own when it finishes, and pressing Record afterwards would
+            # otherwise file the same numbers a second time.
+            self.refresh_history(previous[-2] if len(previous) > 1 else None, last)
+            if not quiet:
+                self.history_verdict.setText(self.tr(
+                    "The board has not changed since the last recording, so nothing was added."))
+                self.history_verdict.setStyleSheet("")
+            return
         calibration_log.append(entry)
-        self.refresh_history(previous[-1] if previous else None, entry)
+        self.refresh_history(last, entry)
 
 
     def clear_history(self):
@@ -575,6 +586,12 @@ class AlignmentTab(BaseTab):
                     cells.append(f"{value * 1e6:.0f} uH")
                 elif name == 'phase_resistance':
                     cells.append(f"{value:.4f}")
+                elif name == 'phase_offset':
+                    # Raw counts run to five figures and mean nothing on their own: the
+                    # offset is an angle on a circle one electrical revolution around.
+                    reduced = calibration_log.reduced_offset(entry)
+                    cells.append("-" if reduced is None else
+                                 f"{reduced:.0f} ({reduced * 360.0 / calibration_log.electrical_period(entry):+.0f}°)")
                 else:
                     cells.append(f"{value:.0f}")
             cells.append(f"{entry.get('calibration_current', 0):.1f} A")

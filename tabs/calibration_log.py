@@ -91,6 +91,20 @@ def load():
         return []
 
 
+def same_reading(a, b):
+    """
+    Whether two entries describe the same board state, ignoring when they were taken.
+
+    Pressing Record twice, or recording by hand after the check has already done it,
+    stores the same numbers again. A repeat says nothing, and with a cap on the file it
+    pushes out history that did.
+    """
+    if not a or not b:
+        return False
+    keys = [name for name, _, _, _ in FIELDS if name not in ('fet_temp', 'vbus_voltage')]
+    return all(a.get(key) == b.get(key) for key in keys)
+
+
 def append(entry):
     """Adds one entry, keeping the file to the newest MAX_ENTRIES."""
     entries = load()
@@ -131,12 +145,41 @@ def temperature_difference(previous_r, current_r):
     return (current_r / previous_r - 1.0) / COPPER_TEMPCO
 
 
-def electrical_degrees(counts, entry):
-    """Converts a count difference into electrical degrees for that motor."""
+def electrical_period(entry):
+    """Counts in one electrical revolution for this motor, or None if unknown."""
     cpr, pole_pairs = entry.get('cpr'), entry.get('pole_pairs')
     if not cpr or not pole_pairs:
         return None
-    return counts * 360.0 / (cpr / pole_pairs)
+    return cpr / pole_pairs
+
+
+def wrap_counts(counts, period):
+    """
+    Brings a count difference into [-period/2, +period/2).
+
+    The offset lives on a circle one electrical revolution around, so two readings a
+    whole revolution apart are the same angle. Subtracting raw counts counted one such
+    pair as 1317 electrical degrees of drift, which is 123 the short way round, and any
+    recalibration would have raised a false alarm this way.
+    """
+    half = period / 2.0
+    return ((counts + half) % period) - half
+
+
+def reduced_offset(entry):
+    """The stored offset as an angle within one electrical revolution, in counts."""
+    period = electrical_period(entry)
+    if period is None or 'phase_offset' not in entry:
+        return None
+    return wrap_counts(entry['phase_offset'], period)
+
+
+def electrical_degrees(counts, entry):
+    """Converts a count difference into electrical degrees for that motor."""
+    period = electrical_period(entry)
+    if period is None:
+        return None
+    return counts * 360.0 / period
 
 
 def compare(previous, current):
@@ -156,9 +199,10 @@ def compare(previous, current):
         if before == after:
             continue
         if kind == 'position':
-            degrees = electrical_degrees(after - before, current)
-            if degrees is None:
+            period = electrical_period(current)
+            if period is None:
                 continue
+            degrees = electrical_degrees(wrap_counts(after - before, period), current)
             changes.append((name, before, after, abs(degrees), abs(degrees) >= limit))
         elif kind == 'measurement':
             fraction = abs(after - before) / abs(before) if before else 1.0

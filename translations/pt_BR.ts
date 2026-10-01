@@ -3087,6 +3087,10 @@ O índice volta a zerar a posição onde quer que ele esteja, que é o comportam
         <source>Save the configuration to keep this.</source>
         <translation>Salve a configuração para manter isso.</translation>
     </message>
+    <message>
+        <source>The board has not changed since the last recording, so nothing was added.</source>
+        <translation>A placa não mudou desde o último registro, então nada foi acrescentado.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
