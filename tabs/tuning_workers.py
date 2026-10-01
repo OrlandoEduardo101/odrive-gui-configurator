@@ -1497,11 +1497,13 @@ class CentringWorker(QObject):
         ('inertia', ('controller', 'config', 'inertia')),
     ]
 
-    def __init__(self, odrv, move_current, move_velocity, search_index=True):
+    def __init__(self, odrv, move_current, move_velocity, damping=None,
+                 search_index=True):
         super().__init__()
         self.odrv = odrv
         self.move_current = move_current
         self.move_velocity = move_velocity
+        self.damping = damping
         self.search_index = search_index
         self.runaway_speed = min(
             max(abs(move_velocity) * self.RUNAWAY_FACTOR, self.RUNAWAY_FLOOR),
@@ -1594,6 +1596,15 @@ class CentringWorker(QObject):
             # overshoot into a runaway.
             axis.controller.config.pos_gain = self.MOVE_POS_GAIN
             axis.controller.config.vel_integrator_gain = 0.0
+            # vel_gain is the damper of this loop: torque against velocity, the same
+            # thing the OpenFFBoard damper does for the wheel in use. Left at the stock
+            # 0.16 it gives a velocity loop of well over a second on a direct drive
+            # wheel's inertia, while the position loop above asks for a fifth of that,
+            # and a loop asked to be faster than it can be is what overshoots and runs
+            # away. Raising it is what makes the move controllable, exactly as turning
+            # the damper up is what makes the wheel controllable.
+            if self.damping:
+                axis.controller.config.vel_gain = float(self.damping)
             axis.controller.config.vel_limit = float(self.move_velocity) * 1.5
             axis.trap_traj.config.vel_limit = float(self.move_velocity)
             axis.trap_traj.config.accel_limit = float(self.move_velocity) * 2.0

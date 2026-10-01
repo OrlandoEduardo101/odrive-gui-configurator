@@ -273,9 +273,18 @@ class AlignmentTab(BaseTab):
         self.move_speed_input.setDecimals(2)
         self.move_speed_input.setValue(0.50)
         self.move_speed_input.setSuffix(" turns/s")
+        # The wheel's own damper, under the name ODrive gives it. A direct drive wheel
+        # has no friction to settle it, so without this the move oscillates for the same
+        # reason the wheel does with the OpenFFBoard damper at zero.
+        self.move_damping_input = QDoubleSpinBox()
+        self.move_damping_input.setRange(0.05, 20.0)
+        self.move_damping_input.setDecimals(2)
+        self.move_damping_input.setValue(2.0)
         self.label_move_current, self.label_move_speed = QLabel(), QLabel()
+        self.label_move_damping = QLabel()
         form.addRow(self.label_move_current, self.move_current_input)
         form.addRow(self.label_move_speed, self.move_speed_input)
+        form.addRow(self.label_move_damping, self.move_damping_input)
         layout.addLayout(form)
 
         self.centre_warning = QLabel()
@@ -350,6 +359,13 @@ class AlignmentTab(BaseTab):
         self.move_speed_input.setToolTip(self.tr(
             "Walking pace. The move is a trapezoidal profile, so it accelerates and stops "
             "smoothly rather than snapping to centre."))
+        self.label_move_damping.setText(self.tr("Damping while moving:"))
+        self.move_damping_input.setToolTip(self.tr(
+            "The same job the OpenFFBoard damper does, under the name ODrive gives it: "
+            "vel_gain, torque against velocity. A direct drive wheel has no friction to settle "
+            "it, so too little here and the move overshoots and oscillates just as the wheel "
+            "does with the damper at zero. The stock 0.16 is far too little for a wheel's "
+            "inertia. Raise it until the move is calm."))
         self.centre_warning.setText(self.tr(
             "The wheel turns on its own for all three of these. Keep hands and cables clear."))
         self.mark_centre_btn.setText(self.tr("Set Current Position as Centre"))
@@ -848,7 +864,8 @@ class AlignmentTab(BaseTab):
         self.progress_bar.setValue(0)
         self.centre_result.setText("")
         self.centre_worker = CentringWorker(odrv, self.move_current_input.value(),
-                                            self.move_speed_input.value())
+                                            self.move_speed_input.value(),
+                                            self.move_damping_input.value())
         self.centre_thread = QThread()
         self.centre_worker.moveToThread(self.centre_thread)
         self.centre_worker.progress.connect(self._on_centre_progress)

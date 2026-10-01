@@ -3015,6 +3015,14 @@ A busca de índice continua ligada, então o centro que você guardou continua v
         <source>The wheel will no longer move to centre at power-on. It still finds the index, so the stored centre is unchanged. Save the configuration to keep this.</source>
         <translation>O volante não vai mais ir ao centro ao ligar. Ele continua achando o índice, então o centro guardado está intacto. Salve a configuração para manter isso.</translation>
     </message>
+    <message>
+        <source>Damping while moving:</source>
+        <translation>Amortecimento durante o movimento:</translation>
+    </message>
+    <message>
+        <source>The same job the OpenFFBoard damper does, under the name ODrive gives it: vel_gain, torque against velocity. A direct drive wheel has no friction to settle it, so too little here and the move overshoots and oscillates just as the wheel does with the damper at zero. The stock 0.16 is far too little for a wheel&apos;s inertia. Raise it until the move is calm.</source>
+        <translation>O mesmo trabalho que o damper do OpenFFBoard faz, sob o nome que a ODrive dá: vel_gain, torque contra velocidade. Um volante direct drive não tem atrito que o acomode, então pouco demais aqui e o movimento passa do ponto e oscila, igual ao volante com o damper em zero. O padrão 0,16 é pouquíssimo para a inércia de um aro. Aumente até o movimento ficar calmo.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
