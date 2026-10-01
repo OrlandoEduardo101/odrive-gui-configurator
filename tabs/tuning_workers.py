@@ -1478,6 +1478,12 @@ class CentringWorker(QObject):
     # centring move needs this much, so nothing legitimate is lost.
     RUNAWAY_CEILING = 2.0
 
+    # Twenty milliseconds between looks. At fifty the wheel reached 3.4 turns/s before
+    # anything noticed, and a check that slow is a report rather than a guard.
+    POLL_S = 0.02
+    # How far the wheel may fall behind the setpoint before it stops advancing.
+    MAX_LAG_TURNS = 0.05
+
     ARRIVAL_TURNS = 0.01        # within a hundredth of a turn is centred
     ARRIVAL_SETTLE_S = 0.4      # and it has to stay there, not just pass through
     MOVE_TIMEOUT_S = 25.0
@@ -1610,9 +1616,18 @@ class CentringWorker(QObject):
             axis.trap_traj.config.accel_limit = float(self.move_velocity) * 2.0
             axis.trap_traj.config.decel_limit = float(self.move_velocity) * 2.0
             axis.controller.config.inertia = 0.0
+            # The setpoint starts where the wheel already is and is walked towards zero
+            # from here, rather than handing the drive the far end and trusting it to
+            # pace itself. Trap trajectory was doing that pacing, and when the loop did
+            # not follow, nothing bounded what it did on the way: hardware reached 3.4
+            # turns/s against the 0.5 it was asked for. A setpoint that is never more
+            # than one step from the wheel cannot ask for more than one step's worth of
+            # speed, whatever the gains are doing, so the bound no longer depends on the
+            # loop behaving.
             axis.controller.config.control_mode = CONTROL_MODE_POSITION_CONTROL
-            axis.controller.config.input_mode = INPUT_MODE_TRAP_TRAJ
-            axis.controller.input_pos = 0.0
+            axis.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+            setpoint = float(axis.encoder.pos_estimate)
+            axis.controller.input_pos = setpoint
 
             axis.error = 0
             axis.motor.error = 0
@@ -1647,10 +1662,25 @@ class CentringWorker(QObject):
                         "It ran away: {0:.2f} turns/s against the {1:.2f} asked for, so the "
                         "torque was cut and the axis put back to idle.\n\nThe velocity loop "
                         "is not holding a setpoint on this motor. Lower the move speed, or "
-                        "centre by hand.").format(speed, self.move_velocity))
+                        "centre by hand.\n\nIt was {2:.3f} turns from the setpoint when this "
+                        "happened, which was {3:.3f} from centre.").format(
+                            speed, self.move_velocity,
+                            float(axis.encoder.pos_estimate) - setpoint, setpoint))
 
                 position = float(axis.encoder.pos_estimate)
-                if abs(position) <= self.ARRIVAL_TURNS:
+
+                # The wheel is allowed to fall behind by one step and no more. Letting
+                # the setpoint run ahead of a wheel that is stuck would build exactly the
+                # error this design exists to avoid.
+                if abs(setpoint - position) < self.MAX_LAG_TURNS:
+                    step = self.move_velocity * self.POLL_S
+                    if abs(setpoint) <= step:
+                        setpoint = 0.0
+                    else:
+                        setpoint -= math.copysign(step, setpoint)
+                    axis.controller.input_pos = setpoint
+
+                if abs(position) <= self.ARRIVAL_TURNS and setpoint == 0.0:
                     settled_since = settled_since or time.time()
                     if time.time() - settled_since >= self.ARRIVAL_SETTLE_S:
                         break
@@ -1660,9 +1690,10 @@ class CentringWorker(QObject):
                     raise RuntimeError(QCoreApplication.translate(
                         "CentringWorker",
                         "It did not reach centre within {0:.0f} seconds, stopping {1:.3f} turns "
-                        "away. The move current may be too low to overcome the cogging.").format(
-                            self.MOVE_TIMEOUT_S, position))
-                time.sleep(0.05)
+                        "away, with the setpoint {2:.3f} ahead of it. The move current may be "
+                        "too low to overcome the cogging.").format(
+                            self.MOVE_TIMEOUT_S, position, setpoint - position))
+                time.sleep(self.POLL_S)
 
             axis.requested_state = AXIS_STATE_IDLE
             self.progress.emit(QCoreApplication.translate(
