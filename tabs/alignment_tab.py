@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 import math
 import time
 
-from PySide6.QtCore import Qt, QEvent, QThread
+from PySide6.QtCore import Qt, QEvent, QThread, QTimer
 from odrive.enums import CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_TRAP_TRAJ
 
 from .base_tab import BaseTab
@@ -90,17 +90,31 @@ class AlignmentTab(BaseTab):
         self.calib_current_input.valueChanged.connect(self._mark_current_touched)
         self.calib_current_input.setSuffix(" A")
 
+        # The ceiling the resistance measurement is allowed to push to. It belongs beside
+        # the current because the two set that measurement together, and a motor that
+        # cannot reach its test current within this voltage calibrates against whatever
+        # it managed instead. Like the current, it mirrors the board until overridden.
+        self.calib_voltage_input = QDoubleSpinBox()
+        self.calib_voltage_input.setRange(0.5, 24.0)
+        self.calib_voltage_input.setDecimals(1)
+        self.calib_voltage_input.setValue(2.0)
+        self.calib_voltage_input.setSuffix(" V")
+        self._calib_voltage_touched = False
+        self.calib_voltage_input.valueChanged.connect(self._mark_voltage_touched)
+
         for widget in (self.runs_input, self.revolutions_input, self.calib_current_input):
             widget.valueChanged.connect(self._update_estimate)
 
         self.label_runs = QLabel()
         self.label_revolutions = QLabel()
         self.label_calib_current = QLabel()
+        self.label_calib_voltage = QLabel()
         params_layout.addRow(self.label_runs, self.runs_input)
         params_layout.addRow(self.apply_check)
         params_layout.addRow(self.keep_scan_check)
         params_layout.addRow(self.label_revolutions, self.revolutions_input)
         params_layout.addRow(self.label_calib_current, self.calib_current_input)
+        params_layout.addRow(self.label_calib_voltage, self.calib_voltage_input)
 
         self.current_scan_label = QLabel()
         self.current_scan_label.setWordWrap(True)
@@ -137,8 +151,48 @@ class AlignmentTab(BaseTab):
         main_layout.addWidget(self.progress_bar)
         main_layout.addWidget(self.status_label)
         main_layout.addWidget(self._build_centre_group())
+        main_layout.addWidget(self._build_count_group())
         main_layout.addWidget(self._build_history_group())
         main_layout.addStretch()
+
+    def _build_count_group(self):
+        """Checks whether the encoder's counts survive being turned."""
+        self.count_group = QGroupBox()
+        layout = QVBoxLayout(self.count_group)
+
+        self.count_help = QLabel()
+        self.count_help.setWordWrap(True)
+        layout.addWidget(self.count_help)
+
+        self.count_reading = QLabel()
+        self.count_reading.setWordWrap(True)
+        self.count_reading.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.count_reading)
+
+        self.count_verdict = QLabel()
+        self.count_verdict.setWordWrap(True)
+        layout.addWidget(self.count_verdict)
+
+        row = QHBoxLayout()
+        self.count_mark_btn = QPushButton()
+        self.count_mark_btn.clicked.connect(self.mark_count_reference)
+        self.count_stop_btn = QPushButton()
+        self.count_stop_btn.clicked.connect(self.stop_count_test)
+        self.count_stop_btn.setEnabled(False)
+        row.addWidget(self.count_mark_btn)
+        row.addWidget(self.count_stop_btn)
+        row.addStretch()
+        layout.addLayout(row)
+
+        # Polling rather than the telemetry signal, because this panel wants a reading
+        # whether or not anything else is listening, and five a second is plenty for a
+        # wheel being turned by hand.
+        self._count_reference = None
+        self._count_extreme = 0.0
+        self.count_timer = QTimer(self)
+        self.count_timer.setInterval(200)
+        self.count_timer.timeout.connect(self._poll_count)
+        return self.count_group
 
     def _build_history_group(self):
         """What past calibrations produced, so this one can be judged against them."""
@@ -234,6 +288,18 @@ class AlignmentTab(BaseTab):
             "the square root of the number of runs. It uses the native calibration exactly as it "
             "is; it just does not trust any single roll of it."
         ))
+        self.count_group.setTitle(self.tr("Count Check"))
+        self.count_help.setText(self.tr(
+            "An incremental encoder has to keep every count it reads. Lose some and the "
+            "commutation angle shifts with them, and past ninety electrical degrees the torque "
+            "reverses, so the wheel goes light and pulls the way it is already turning. Mark a "
+            "spot, swing the wheel about at the speed it sees in use, bring the mark back, and "
+            "the reading should land on a whole number of turns."))
+        self.count_mark_btn.setText(self.tr("Mark This Position"))
+        self.count_mark_btn.setToolTip(self.tr(
+            "Takes the wheel's position now as the mark. Put something visible on the rim to "
+            "line it back up against."))
+        self.count_stop_btn.setText(self.tr("Stop"))
         self.history_group.setTitle(self.tr("Calibration History"))
         self.history_help.setText(self.tr(
             "One calibration on its own tells you nothing about whether it went well. Recorded "
@@ -282,6 +348,9 @@ class AlignmentTab(BaseTab):
         self.keep_scan_check.setToolTip(self.tr("Measured on a 15 pole pair hoverboard motor, the firmware default repeated more tightly than longer scans, and runs far quicker."))
         self.label_revolutions.setText(self.tr("Whole revolutions to scan:"))
         self.label_calib_current.setText(self.tr("Calibration current:"))
+        self.label_calib_voltage.setText(self.tr("Calibration voltage:"))
+        self.calib_voltage_input.setToolTip(self.tr(
+            "The ceiling the resistance measurement may push to. Too low and the motor never reaches its test current, so it measures against whatever it managed."))
         self.runs_input.setToolTip(self.tr("More runs measure the spread better, and take proportionally longer."))
         self.revolutions_input.setToolTip(self.tr("Cogging repeats with mechanical position, so a scan covering whole revolutions lets it average out."))
         self.calib_current_input.setToolTip(self.tr(
@@ -300,6 +369,94 @@ class AlignmentTab(BaseTab):
         self._update_estimate()
 
 
+
+
+    # ----------------------------------------------------------- count integrity ---
+
+    # Half a count of play is nothing; a tenth of a turn is a real loss. The warning
+    # threshold sits where the error starts costing commutation rather than patience.
+    COUNT_WARN_ELECTRICAL_DEG = 10.0
+
+    def mark_count_reference(self):
+        """Takes the wheel's position now as the mark to come back to."""
+        odrv = self.get_odrv()
+        if not odrv:
+            return
+        try:
+            self._count_reference = float(odrv.axis0.encoder.pos_estimate)
+        except Exception as e:
+            self.count_verdict.setText(self.tr("Could not read the encoder: {0}").format(e))
+            self.count_verdict.setStyleSheet(f"color: {AppColors.ERROR};")
+            return
+        self._count_extreme = 0.0
+        self.count_mark_btn.setEnabled(False)
+        self.count_stop_btn.setEnabled(True)
+        self.count_timer.start()
+        self._poll_count()
+
+    def stop_count_test(self):
+        self.count_timer.stop()
+        self.count_mark_btn.setEnabled(True)
+        self.count_stop_btn.setEnabled(False)
+
+    def _poll_count(self):
+        """
+        Reports how far the wheel has gone, and how far that is from a whole turn.
+
+        Returning to the same physical spot has to read a whole number of turns, so the
+        distance to the nearest one is the counting error and needs no precision from
+        whoever is turning the wheel: line the mark up by eye and the number is the
+        answer. Counts are lost when the encoder is moving quickly, not while it is
+        eased round by hand, so the figure only means something after the wheel has been
+        swung about at the speed it sees in use.
+        """
+        odrv = self._quiet_odrv()
+        if odrv is None or self._count_reference is None:
+            self.stop_count_test()
+            return
+        try:
+            travelled = float(odrv.axis0.encoder.pos_estimate) - self._count_reference
+        except Exception:
+            return
+        self._count_extreme = max(self._count_extreme, abs(travelled))
+
+        nearest = round(travelled)
+        error_turns = travelled - nearest
+        error_degrees = error_turns * 360.0
+        electrical = abs(error_degrees) * self._pole_pairs() if self._pole_pairs() else 0.0
+
+        self.count_reading.setText("\n".join([
+            self.tr("Travelled since the mark: {0:+.4f} turns ({1:+.1f}°)").format(
+                travelled, travelled * 360.0),
+            self.tr("Furthest from the mark so far: {0:.2f} turns").format(self._count_extreme),
+            self.tr("Distance to the nearest whole turn: {0:+.4f} turns ({1:+.2f}°, "
+                    "{2:.1f}° electrical)").format(error_turns, error_degrees, electrical),
+        ]))
+
+        if self._count_extreme < 0.5:
+            self.count_verdict.setText(self.tr(
+                "Turn the wheel at least one full turn each way, briskly, then bring the mark "
+                "back to where it started."))
+            self.count_verdict.setStyleSheet("")
+        elif electrical >= self.COUNT_WARN_ELECTRICAL_DEG:
+            self.count_verdict.setText(self.tr(
+                "If the mark is lined up, the encoder has lost about {0:.0f} counts, which is "
+                "{1:.0f} electrical degrees. Past ninety the torque reverses and the wheel pulls "
+                "the way it is already going.").format(
+                    abs(error_turns) * self._cpr(), electrical))
+            self.count_verdict.setStyleSheet(f"color: {AppColors.WARNING};")
+        else:
+            self.count_verdict.setText(self.tr(
+                "With the mark lined up this is {0:.1f} electrical degrees out, which is within "
+                "what lining it up by eye can tell apart.").format(electrical))
+            self.count_verdict.setStyleSheet(f"color: {AppColors.SUCCESS};")
+
+    def _cpr(self):
+        odrv = self._quiet_odrv()
+        try:
+            return float(odrv.axis0.encoder.config.cpr)
+        except Exception:
+            return 0.0
 
     # ------------------------------------------------------ calibration history ---
 
@@ -709,6 +866,10 @@ class AlignmentTab(BaseTab):
         """Remembers that the calibration current is the user's choice, not the board's."""
         self._calib_current_touched = True
 
+    def _mark_voltage_touched(self, _value):
+        """Same for the resistance calibration voltage."""
+        self._calib_voltage_touched = True
+
     def _sync_calibration_current(self):
         """
         Adopts the board's calibration current until the user overrides it.
@@ -727,6 +888,18 @@ class AlignmentTab(BaseTab):
             self.calib_current_input.blockSignals(True)
             self.calib_current_input.setValue(board)
             self.calib_current_input.blockSignals(False)
+
+        if self._calib_voltage_touched:
+            return
+        try:
+            volts = float(
+                self.main_window.odrv_proxy.odrv.axis0.motor.config.resistance_calib_max_voltage)
+        except Exception:
+            return
+        if volts > 0 and abs(volts - self.calib_voltage_input.value()) > 0.05:
+            self.calib_voltage_input.blockSignals(True)
+            self.calib_voltage_input.setValue(volts)
+            self.calib_voltage_input.blockSignals(False)
 
     def _pole_pairs(self):
         if not self.main_window.is_connected or not self.main_window.odrv_proxy:
@@ -794,6 +967,7 @@ class AlignmentTab(BaseTab):
             runs=self.runs_input.value(),
             mechanical_revolutions=self.revolutions_input.value(),
             calibration_current=self.calib_current_input.value(),
+            calibration_voltage=self.calib_voltage_input.value(),
             keep_scan_distance=self.keep_scan_check.isChecked(),
             apply_average=self.apply_check.isChecked(),
         )

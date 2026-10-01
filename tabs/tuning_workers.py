@@ -153,12 +153,13 @@ class CalibrationQualityWorker(QObject):
     MAX_SPREAD_TO_APPLY_DEG = 15.0
 
     def __init__(self, odrv, runs, mechanical_revolutions, calibration_current,
-                 keep_scan_distance=True, apply_average=False):
+                 keep_scan_distance=True, apply_average=False, calibration_voltage=None):
         super().__init__()
         self.odrv = odrv
         self.runs = runs
         self.mechanical_revolutions = mechanical_revolutions
         self.calibration_current = calibration_current
+        self.calibration_voltage = calibration_voltage
         self.keep_scan_distance = keep_scan_distance
         self.apply_average = apply_average
         self._is_running = True
@@ -371,6 +372,11 @@ class CalibrationQualityWorker(QObject):
         try:
             self._saved['scan_distance'] = axis.encoder.config.calib_scan_distance
             self._saved['calibration_current'] = axis.motor.config.calibration_current
+            try:
+                self._saved['calibration_voltage'] = \
+                    axis.motor.config.resistance_calib_max_voltage
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -381,6 +387,12 @@ class CalibrationQualityWorker(QObject):
                     self.mechanical_revolutions * 2.0 * math.pi * pole_pairs)
                 current_distance = axis.encoder.config.calib_scan_distance
             axis.motor.config.calibration_current = float(self.calibration_current)
+            if self.calibration_voltage:
+                try:
+                    axis.motor.config.resistance_calib_max_voltage = \
+                        float(self.calibration_voltage)
+                except Exception:
+                    pass
             scanned_revolutions = current_distance / (2.0 * math.pi * pole_pairs)
 
             offsets = self._series(QCoreApplication.translate(
@@ -515,6 +527,9 @@ class CalibrationQualityWorker(QObject):
                 self.odrv.axis0.encoder.config.calib_scan_distance = self._saved['scan_distance']
             if 'calibration_current' in self._saved:
                 self.odrv.axis0.motor.config.calibration_current = self._saved['calibration_current']
+            if 'calibration_voltage' in self._saved:
+                self.odrv.axis0.motor.config.resistance_calib_max_voltage = \
+                    self._saved['calibration_voltage']
         except Exception:
             pass
 

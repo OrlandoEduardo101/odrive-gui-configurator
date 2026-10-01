@@ -2939,6 +2939,58 @@ Mãos longe do volante. Continuar?</translation>
         <source>{0}: {1:.4g} to {2:.4g}.</source>
         <translation>{0}: {1:.4g} para {2:.4g}.</translation>
     </message>
+    <message>
+        <source>Count Check</source>
+        <translation>Verificação de Contagem</translation>
+    </message>
+    <message>
+        <source>An incremental encoder has to keep every count it reads. Lose some and the commutation angle shifts with them, and past ninety electrical degrees the torque reverses, so the wheel goes light and pulls the way it is already turning. Mark a spot, swing the wheel about at the speed it sees in use, bring the mark back, and the reading should land on a whole number of turns.</source>
+        <translation>Um encoder incremental precisa guardar cada contagem que lê. Perder algumas desloca o ângulo de comutação junto, e passando de noventa graus elétricos o torque inverte, então o volante fica leve e puxa no sentido em que já está girando. Marque um ponto, gire o volante na velocidade em que ele é usado, traga a marca de volta, e a leitura deve cair num número inteiro de voltas.</translation>
+    </message>
+    <message>
+        <source>Mark This Position</source>
+        <translation>Marcar Esta Posição</translation>
+    </message>
+    <message>
+        <source>Takes the wheel&apos;s position now as the mark. Put something visible on the rim to line it back up against.</source>
+        <translation>Toma a posição atual do volante como marca. Ponha algo visível no aro para alinhar de volta.</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Parar</translation>
+    </message>
+    <message>
+        <source>Calibration voltage:</source>
+        <translation>Tensão de calibração:</translation>
+    </message>
+    <message>
+        <source>The ceiling the resistance measurement may push to. Too low and the motor never reaches its test current, so it measures against whatever it managed.</source>
+        <translation>O teto até onde a medição de resistência pode forçar. Baixo demais e o motor nunca alcança a corrente de teste, então ele mede contra o que conseguiu.</translation>
+    </message>
+    <message>
+        <source>Turn the wheel at least one full turn each way, briskly, then bring the mark back to where it started.</source>
+        <translation>Gire o volante pelo menos uma volta completa para cada lado, com vigor, e então traga a marca de volta ao ponto de partida.</translation>
+    </message>
+    <message>
+        <source>Travelled since the mark: {0:+.4f} turns ({1:+.1f}°)</source>
+        <translation>Percorrido desde a marca: {0:+.4f} voltas ({1:+.1f}°)</translation>
+    </message>
+    <message>
+        <source>Furthest from the mark so far: {0:.2f} turns</source>
+        <translation>Maior distância da marca até agora: {0:.2f} voltas</translation>
+    </message>
+    <message>
+        <source>Distance to the nearest whole turn: {0:+.4f} turns ({1:+.2f}°, {2:.1f}° electrical)</source>
+        <translation>Distância até a volta inteira mais próxima: {0:+.4f} voltas ({1:+.2f}°, {2:.1f}° elétricos)</translation>
+    </message>
+    <message>
+        <source>If the mark is lined up, the encoder has lost about {0:.0f} counts, which is {1:.0f} electrical degrees. Past ninety the torque reverses and the wheel pulls the way it is already going.</source>
+        <translation>Se a marca está alinhada, o encoder perdeu cerca de {0:.0f} contagens, o que dá {1:.0f} graus elétricos. Passando de noventa o torque inverte e o volante puxa no sentido em que já está indo.</translation>
+    </message>
+    <message>
+        <source>With the mark lined up this is {0:.1f} electrical degrees out, which is within what lining it up by eye can tell apart.</source>
+        <translation>Com a marca alinhada isto está {0:.1f} graus elétricos fora, o que está dentro do que alinhar a olho consegue distinguir.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
