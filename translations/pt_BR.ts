@@ -2991,6 +2991,30 @@ Mãos longe do volante. Continuar?</translation>
         <source>With the mark lined up this is {0:.1f} electrical degrees out, which is within what lining it up by eye can tell apart.</source>
         <translation>Com a marca alinhada isto está {0:.1f} graus elétricos fora, o que está dentro do que alinhar a olho consegue distinguir.</translation>
     </message>
+    <message>
+        <source>Stop Centring at Power-On</source>
+        <translation>Parar de Centralizar ao Ligar</translation>
+    </message>
+    <message>
+        <source>Stop Centring</source>
+        <translation>Parar de Centralizar</translation>
+    </message>
+    <message>
+        <source>Stop the wheel moving to centre when the drive powers up?
+
+The index search stays on, so the centre you stored is still good and position still means the same thing after every power-on.</source>
+        <translation>Parar o volante de ir ao centro quando a placa liga?
+
+A busca de índice continua ligada, então o centro que você guardou continua válido e a posição continua significando a mesma coisa a cada vez que liga.</translation>
+    </message>
+    <message>
+        <source>Could not change the control mode: {0}</source>
+        <translation>Não foi possível mudar o modo de controle: {0}</translation>
+    </message>
+    <message>
+        <source>The wheel will no longer move to centre at power-on. It still finds the index, so the stored centre is unchanged. Save the configuration to keep this.</source>
+        <translation>O volante não vai mais ir ao centro ao ligar. Ele continua achando o índice, então o centro guardado está intacto. Salve a configuração para manter isso.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>

@@ -15,6 +15,7 @@ import time
 
 from PySide6.QtCore import Qt, QEvent, QThread, QTimer
 from odrive.enums import CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_TRAP_TRAJ
+from odrive.enums import CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH
 
 from .base_tab import BaseTab
 from .tuning_workers import CalibrationQualityWorker, CentringWorker, resolve
@@ -689,6 +690,11 @@ class AlignmentTab(BaseTab):
             except Exception:
                 continue
 
+        # Whether the move to centre is armed decides what the button does, so that
+        # turning it off is as reachable as turning it on. Only the position control
+        # half is considered: the index search can stay on either way, and should,
+        # since that is what makes the position mean the same thing after every boot.
+        self._autocentre_armed = not missing
         if missing:
             lines.append(self.tr("It will NOT centre itself at power-on. Still to set: {0}.")
                          .format(", ".join(missing)))
@@ -696,6 +702,9 @@ class AlignmentTab(BaseTab):
         else:
             lines.append(self.tr("It will find the index and move to centre at power-on."))
             self.centre_status.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.autocentre_btn.setText(
+            self.tr("Stop Centring at Power-On") if self._autocentre_armed
+            else self.tr("Centre Automatically at Power-On"))
         # Kept so the cheap poll can replace the first line without walking the rest.
         self._centre_lines = lines
         self.centre_status.setText("\n".join(lines))
@@ -753,9 +762,12 @@ class AlignmentTab(BaseTab):
         self.refresh_centre_status()
 
     def enable_autocentre(self):
-        """Writes the settings that make the axis centre itself at every power-on."""
+        """Arms the move to centre at power-on, or stands it down if it is already armed."""
         odrv = self.get_odrv()
         if not odrv:
+            return
+        if getattr(self, '_autocentre_armed', False):
+            self.disable_autocentre(odrv)
             return
         if QMessageBox.question(self, self.tr("Centre At Power-On"), self.tr(
                 "From now on the wheel will turn on its own at every power-on: first to find "
@@ -785,6 +797,37 @@ class AlignmentTab(BaseTab):
             "The OpenFFBoard switches the axis to torque control when it connects over CAN, so "
             "force feedback takes over once it has centred.")
         self.centre_result.setText(message)
+        self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        self.refresh_centre_status()
+
+
+    def disable_autocentre(self, odrv):
+        """
+        Stands down the move to centre, leaving the index search alone.
+
+        Only position control is undone. The index search is what makes the position
+        mean the same thing after every boot, so a wheel that is no longer to move on
+        its own still wants it, and the stored centre stays valid for when it is armed
+        again.
+        """
+        if QMessageBox.question(self, self.tr("Stop Centring"), self.tr(
+                "Stop the wheel moving to centre when the drive powers up?\n\n"
+                "The index search stays on, so the centre you stored is still good and "
+                "position still means the same thing after every power-on."),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            odrv.axis0.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
+            odrv.axis0.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+            odrv.axis0.controller.input_torque = 0.0
+        except Exception as e:
+            self.centre_result.setText(self.tr("Could not change the control mode: {0}").format(e))
+            self.centre_result.setStyleSheet(f"color: {AppColors.ERROR};")
+            return
+        self.centre_result.setText(self.tr(
+            "The wheel will no longer move to centre at power-on. It still finds the index, so "
+            "the stored centre is unchanged. Save the configuration to keep this."))
         self.centre_result.setStyleSheet(f"color: {AppColors.SUCCESS};")
         self.refresh_centre_status()
 
