@@ -4192,5 +4192,13 @@ Rodou com {0:.1f} A e até {1:.1f} voltas/s; seus limites de force feedback fora
         <source>It did not reach centre within {0:.0f} seconds, stopping {1:.3f} turns away. The move current may be too low to overcome the cogging.</source>
         <translation>Não chegou ao centro em {0:.0f} segundos, parando a {1:.3f} volta de distância. A corrente de movimento pode estar baixa demais para vencer o cogging.</translation>
     </message>
+    <message>
+        <source>It ran away: {0:.2f} turns/s against the {1:.2f} asked for, so the torque was cut and the axis put back to idle.
+
+The velocity loop is not holding a setpoint on this motor. Lower the move speed, or centre by hand.</source>
+        <translation>Ele disparou: {0:.2f} voltas/s contra as {1:.2f} pedidas, então o torque foi cortado e o eixo voltou para IDLE.
+
+O loop de velocidade não está segurando setpoint neste motor. Reduza a velocidade de movimento, ou centralize à mão.</translation>
+    </message>
 </context>
 </TS>

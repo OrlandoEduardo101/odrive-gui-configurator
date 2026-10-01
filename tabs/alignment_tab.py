@@ -266,7 +266,9 @@ class AlignmentTab(BaseTab):
         self.move_current_input.setValue(6.0)
         self.move_current_input.setSuffix(" A")
         self.move_speed_input = QDoubleSpinBox()
-        self.move_speed_input.setRange(0.1, 3.0)
+        # Centring is not a race, and the runaway guard scales off this number, so a
+        # high setting would buy a permissive guard on a wheel that cannot afford one.
+        self.move_speed_input.setRange(0.1, 1.5)
         self.move_speed_input.setDecimals(2)
         self.move_speed_input.setValue(0.50)
         self.move_speed_input.setSuffix(" turns/s")

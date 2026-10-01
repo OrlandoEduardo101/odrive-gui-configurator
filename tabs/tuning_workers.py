@@ -1466,6 +1466,18 @@ class CentringWorker(QObject):
     result = Signal(bool, str)
     finished = Signal()
 
+    # Soft enough that the loop cannot wind up into an overshoot on a wheel this heavy.
+    MOVE_POS_GAIN = 5.0
+    # What counts as a runaway. The trajectory never asks for more than the move speed,
+    # so anything well past it is the loop, not the plan.
+    RUNAWAY_FACTOR = 2.5
+    RUNAWAY_FLOOR = 1.0
+    # An absolute ceiling as well, because scaling the guard off the requested speed
+    # alone lets a high request buy a permissive guard: asking for three turns a second
+    # would not trip until seven and a half, by which point a wheel is dangerous. No
+    # centring move needs this much, so nothing legitimate is lost.
+    RUNAWAY_CEILING = 2.0
+
     ARRIVAL_TURNS = 0.01        # within a hundredth of a turn is centred
     ARRIVAL_SETTLE_S = 0.4      # and it has to stay there, not just pass through
     MOVE_TIMEOUT_S = 25.0
@@ -1476,6 +1488,10 @@ class CentringWorker(QObject):
         ('input_mode', ('controller', 'config', 'input_mode')),
         ('current_lim', ('motor', 'config', 'current_lim')),
         ('vel_limit', ('trap_traj', 'config', 'vel_limit')),
+        ('ctrl_vel_limit', ('controller', 'config', 'vel_limit')),
+        ('pos_gain', ('controller', 'config', 'pos_gain')),
+        ('vel_gain', ('controller', 'config', 'vel_gain')),
+        ('vel_integrator_gain', ('controller', 'config', 'vel_integrator_gain')),
         ('accel_limit', ('trap_traj', 'config', 'accel_limit')),
         ('decel_limit', ('trap_traj', 'config', 'decel_limit')),
         ('inertia', ('controller', 'config', 'inertia')),
@@ -1487,6 +1503,9 @@ class CentringWorker(QObject):
         self.move_current = move_current
         self.move_velocity = move_velocity
         self.search_index = search_index
+        self.runaway_speed = min(
+            max(abs(move_velocity) * self.RUNAWAY_FACTOR, self.RUNAWAY_FLOOR),
+            self.RUNAWAY_CEILING)
         self._is_running = True
         self._saved = {}
 
@@ -1567,6 +1586,15 @@ class CentringWorker(QObject):
             self.progress.emit(QCoreApplication.translate(
                 "CentringWorker", "Moving to centre..."), 55)
             axis.motor.config.current_lim = float(self.move_current)
+            # The velocity loop on a direct drive wheel does not hold a setpoint with the
+            # gains force feedback leaves behind: that is why the Kt measurement had to
+            # move to an open loop spin, and position control sits on top of the same
+            # loop. So the move runs on gains of its own, soft enough to be sluggish,
+            # and with the integrator off because a wound up integrator is what turns
+            # overshoot into a runaway.
+            axis.controller.config.pos_gain = self.MOVE_POS_GAIN
+            axis.controller.config.vel_integrator_gain = 0.0
+            axis.controller.config.vel_limit = float(self.move_velocity) * 1.5
             axis.trap_traj.config.vel_limit = float(self.move_velocity)
             axis.trap_traj.config.accel_limit = float(self.move_velocity) * 2.0
             axis.trap_traj.config.decel_limit = float(self.move_velocity) * 2.0
@@ -1596,6 +1624,20 @@ class CentringWorker(QObject):
                     raise RuntimeError(QCoreApplication.translate(
                         "CentringWorker", "The axis faulted while moving:\n\n{0}").format(
                             describe_axis_error(axis) or hex(axis.error)))
+                # The guard the first version of this went without. Trap trajectory
+                # bounds the setpoint, not the motor, and if the loop runs away the
+                # setpoint is not what the wheel is doing. Nothing else here would have
+                # stopped it, since a runaway raises no error on its own.
+                speed = abs(float(axis.encoder.vel_estimate))
+                if speed > self.runaway_speed:
+                    axis.requested_state = AXIS_STATE_IDLE
+                    raise RuntimeError(QCoreApplication.translate(
+                        "CentringWorker",
+                        "It ran away: {0:.2f} turns/s against the {1:.2f} asked for, so the "
+                        "torque was cut and the axis put back to idle.\n\nThe velocity loop "
+                        "is not holding a setpoint on this motor. Lower the move speed, or "
+                        "centre by hand.").format(speed, self.move_velocity))
+
                 position = float(axis.encoder.pos_estimate)
                 if abs(position) <= self.ARRIVAL_TURNS:
                     settled_since = settled_since or time.time()
