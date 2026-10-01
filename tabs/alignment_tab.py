@@ -7,15 +7,18 @@ this sweep can run.
 """
 from PySide6.QtWidgets import (
     QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QDoubleSpinBox, QSpinBox, QProgressBar, QMessageBox, QCheckBox
+    QDoubleSpinBox, QSpinBox, QProgressBar, QMessageBox, QCheckBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 import math
+import time
 
 from PySide6.QtCore import Qt, QEvent, QThread
 from odrive.enums import CONTROL_MODE_POSITION_CONTROL, INPUT_MODE_TRAP_TRAJ
 
 from .base_tab import BaseTab
 from .tuning_workers import CalibrationQualityWorker, CentringWorker, resolve
+from . import calibration_log
 from app_config import AppColors
 
 # Rough per-point overhead for the idle/arm/disarm transitions around each measurement.
@@ -134,7 +137,39 @@ class AlignmentTab(BaseTab):
         main_layout.addWidget(self.progress_bar)
         main_layout.addWidget(self.status_label)
         main_layout.addWidget(self._build_centre_group())
+        main_layout.addWidget(self._build_history_group())
         main_layout.addStretch()
+
+    def _build_history_group(self):
+        """What past calibrations produced, so this one can be judged against them."""
+        self.history_group = QGroupBox()
+        layout = QVBoxLayout(self.history_group)
+
+        self.history_help = QLabel()
+        self.history_help.setWordWrap(True)
+        layout.addWidget(self.history_help)
+
+        self.history_table = QTableWidget(0, 5)
+        self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.history_table.verticalHeader().setVisible(False)
+        self.history_table.setMaximumHeight(150)
+        header = self.history_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.history_table)
+
+        self.history_verdict = QLabel()
+        self.history_verdict.setWordWrap(True)
+        self.history_verdict.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.history_verdict)
+
+        row = QHBoxLayout()
+        self.record_calib_btn = QPushButton()
+        self.record_calib_btn.clicked.connect(self.record_calibration)
+        row.addWidget(self.record_calib_btn)
+        row.addStretch()
+        layout.addLayout(row)
+        return self.history_group
 
     def _build_centre_group(self):
         """The centre reference: where zero is, and whether the axis drives there itself."""
@@ -199,6 +234,19 @@ class AlignmentTab(BaseTab):
             "the square root of the number of runs. It uses the native calibration exactly as it "
             "is; it just does not trust any single roll of it."
         ))
+        self.history_group.setTitle(self.tr("Calibration History"))
+        self.history_help.setText(self.tr(
+            "One calibration on its own tells you nothing about whether it went well. Recorded "
+            "next to the previous ones, a resistance that climbed says the motor was hot, and an "
+            "inductance or a direction that jumped says something went wrong. Press Record after "
+            "each calibration."))
+        self.history_table.setHorizontalHeaderLabels([
+            self.tr("When"), self.tr("Resistance (Ω)"), self.tr("Inductance"),
+            self.tr("Offset"), self.tr("Calib. current")])
+        self.record_calib_btn.setText(self.tr("Record This Calibration"))
+        self.record_calib_btn.setToolTip(self.tr(
+            "Stores what the board holds now and compares it against the last recording."))
+        self.refresh_history()
         self.centre_group.setTitle(self.tr("Centre Reference"))
         self.centre_help.setText(self.tr(
             "An incremental encoder counts from wherever it happens to be at power-on, so "
@@ -236,7 +284,11 @@ class AlignmentTab(BaseTab):
         self.label_calib_current.setText(self.tr("Calibration current:"))
         self.runs_input.setToolTip(self.tr("More runs measure the spread better, and take proportionally longer."))
         self.revolutions_input.setToolTip(self.tr("Cogging repeats with mechanical position, so a scan covering whole revolutions lets it average out."))
-        self.calib_current_input.setToolTip(self.tr("Higher current makes the rotor follow the commanded angle instead of sticking in cogging detents."))
+        self.calib_current_input.setToolTip(self.tr(
+            "Enough current for the rotor to follow the commanded angle instead of sticking in "
+            "cogging detents. More is not better past that point: a high calibration current "
+            "heats the winding and sags the bus while it measures, and a calibration taken at "
+            "20 A has been reported worse than the same motor at 10 A."))
 
         self.warning_label.setText(self.tr(
             "The motor will turn on its own during each calibration. Free the shaft before starting."
@@ -247,6 +299,110 @@ class AlignmentTab(BaseTab):
         self.restore_scan_btn.setToolTip(self.tr("Puts calib_scan_distance back to the firmware default of 16*pi electrical radians."))
         self._update_estimate()
 
+
+
+    # ------------------------------------------------------ calibration history ---
+
+    # How a change in each recorded value should be shown. Resistance moves with
+    # temperature and is read as degrees; the rest are shown as they are.
+    HISTORY_COLUMNS = ['phase_resistance', 'phase_inductance', 'phase_offset']
+
+    def record_calibration(self, quiet=False):
+        """Stores what the board holds now, and says how it differs from last time."""
+        odrv = self._quiet_odrv() if quiet else self.get_odrv()
+        if not odrv:
+            return
+        entry = calibration_log.read_snapshot(odrv)
+        if 'phase_resistance' not in entry:
+            if not quiet:
+                QMessageBox.warning(self, self.tr("Nothing to Record"), self.tr(
+                    "Could not read the motor configuration from the board."))
+            return
+        previous = calibration_log.load()
+        calibration_log.append(entry)
+        self.refresh_history(previous[-1] if previous else None, entry)
+
+    def refresh_history(self, previous=None, current=None):
+        """Fills the table from the stored history and explains the latest change."""
+        entries = calibration_log.load()
+        rows = entries[-6:]
+        self.history_table.setRowCount(len(rows))
+        for row, entry in enumerate(reversed(rows)):
+            stamp = time.strftime("%d/%m %H:%M", time.localtime(entry.get('time', 0)))
+            cells = [stamp]
+            for name in self.HISTORY_COLUMNS:
+                value = entry.get(name)
+                if value is None:
+                    cells.append("-")
+                elif name == 'phase_inductance':
+                    cells.append(f"{value * 1e6:.0f} uH")
+                elif name == 'phase_resistance':
+                    cells.append(f"{value:.4f}")
+                else:
+                    cells.append(f"{value:.0f}")
+            cells.append(f"{entry.get('calibration_current', 0):.1f} A")
+            for column, text in enumerate(cells):
+                self.history_table.setItem(row, column, QTableWidgetItem(text))
+
+        if not entries:
+            self.history_verdict.setText(self.tr(
+                "Nothing recorded yet. Press Record after a calibration to start comparing."))
+            self.history_verdict.setStyleSheet("")
+            return
+
+        if previous is None or current is None:
+            if len(entries) >= 2:
+                previous, current = entries[-2], entries[-1]
+            else:
+                self.history_verdict.setText(self.tr(
+                    "One calibration recorded. The next one will be compared against it."))
+                self.history_verdict.setStyleSheet("")
+                return
+
+        lines, worrying = [], False
+        degrees = calibration_log.temperature_difference(
+            previous.get('phase_resistance'), current.get('phase_resistance'))
+        if degrees is not None and abs(degrees) >= 5.0:
+            # Both figures come from the same calibration routine, so what is left
+            # between them is the copper being at a different temperature. That is a
+            # comparison worth making; measuring resistance against a running
+            # measurement instead is not, and this code does not do it.
+            lines.append(self.tr(
+                "The winding is about {0:.0f} C {1} than at the previous calibration.").format(
+                    abs(degrees), self.tr("warmer") if degrees > 0 else self.tr("cooler")))
+            if degrees > 0:
+                worrying = True
+                lines.append(self.tr(
+                    "A warm motor calibrates to a warm resistance, and every later run inherits "
+                    "it: it eats the voltage headroom and the magnets give up about {0:.1f}% of "
+                    "flux, so Kt reads low by that much. Let it cool and calibrate again.")
+                    .format(degrees * 0.11))
+
+        for name, before, after, fraction, notable in calibration_log.compare(previous, current):
+            if not notable:
+                continue
+            worrying = True
+            if name == 'phase_resistance' and degrees is not None:
+                continue      # already said, in degrees, which means more than a percentage
+            if name == 'phase_inductance':
+                lines.append(self.tr("phase_inductance moved {0:.0f}%, {1:.0f} to {2:.0f} uH.")
+                             .format(fraction * 100, before * 1e6, after * 1e6))
+            elif name == 'direction':
+                lines.append(self.tr(
+                    "encoder direction flipped, {0:.0f} to {1:.0f}. The motor will run backwards "
+                    "until this is sorted out.").format(before, after))
+            elif name in ('cpr', 'pole_pairs'):
+                lines.append(self.tr(
+                    "{0} changed from {1:.0f} to {2:.0f}. This is a setting, not a measurement, "
+                    "so something rewrote it.").format(name, before, after))
+            else:
+                lines.append(self.tr("{0}: {1:.4g} to {2:.4g}.").format(name, before, after))
+
+        if not lines:
+            lines.append(self.tr("This calibration matches the previous one."))
+        self.history_verdict.setText("\n".join(lines))
+        self.history_verdict.setStyleSheet(
+            f"color: {AppColors.WARNING};" if worrying else f"color: {AppColors.SUCCESS};")
 
     # ------------------------------------------------------------- centre / zero ---
 
@@ -673,6 +829,10 @@ class AlignmentTab(BaseTab):
             QMessageBox.warning(self, self.tr("Check Failed"), message)
 
     def _on_thread_finished(self):
+        # The check leaves the board freshly calibrated, so record it without waiting to
+        # be asked. Quiet, because a failed connection here should not raise a dialog on
+        # top of whatever the check already reported.
+        self.record_calibration(quiet=True)
         self.align_thread, self.align_worker = None, None
         self.start_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)

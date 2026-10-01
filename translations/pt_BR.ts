@@ -2847,6 +2847,98 @@ Mãos longe do volante. Continuar?</translation>
         <source>Could not write the centre: {0}</source>
         <translation>Não foi possível gravar o centro: {0}</translation>
     </message>
+    <message>
+        <source>Calibration History</source>
+        <translation>Histórico de Calibrações</translation>
+    </message>
+    <message>
+        <source>One calibration on its own tells you nothing about whether it went well. Recorded next to the previous ones, a resistance that climbed says the motor was hot, and an inductance or a direction that jumped says something went wrong. Press Record after each calibration.</source>
+        <translation>Uma calibração sozinha não diz nada sobre ter dado certo. Registrada ao lado das anteriores, uma resistência que subiu diz que o motor estava quente, e uma indutância ou direção que pulou diz que algo deu errado. Aperte Registrar depois de cada calibração.</translation>
+    </message>
+    <message>
+        <source>Record This Calibration</source>
+        <translation>Registrar Esta Calibração</translation>
+    </message>
+    <message>
+        <source>Stores what the board holds now and compares it against the last recording.</source>
+        <translation>Guarda o que a placa tem agora e compara com o último registro.</translation>
+    </message>
+    <message>
+        <source>Enough current for the rotor to follow the commanded angle instead of sticking in cogging detents. More is not better past that point: a high calibration current heats the winding and sags the bus while it measures, and a calibration taken at 20 A has been reported worse than the same motor at 10 A.</source>
+        <translation>Corrente suficiente para o rotor seguir o ângulo comandado em vez de ficar preso nos detents de cogging. Mais não é melhor depois desse ponto: corrente alta de calibração aquece o enrolamento e afunda o barramento durante a medição, e já houve relato de uma calibração a 20 A sair pior que o mesmo motor a 10 A.</translation>
+    </message>
+    <message>
+        <source>When</source>
+        <translation>Quando</translation>
+    </message>
+    <message>
+        <source>Resistance (Ω)</source>
+        <translation>Resistência (Ω)</translation>
+    </message>
+    <message>
+        <source>Inductance</source>
+        <translation>Indutância</translation>
+    </message>
+    <message>
+        <source>Offset</source>
+        <translation>Offset</translation>
+    </message>
+    <message>
+        <source>Calib. current</source>
+        <translation>Corrente calib.</translation>
+    </message>
+    <message>
+        <source>Nothing recorded yet. Press Record after a calibration to start comparing.</source>
+        <translation>Nada registrado ainda. Aperte Registrar depois de uma calibração para começar a comparar.</translation>
+    </message>
+    <message>
+        <source>This calibration matches the previous one.</source>
+        <translation>Esta calibração bate com a anterior.</translation>
+    </message>
+    <message>
+        <source>Nothing to Record</source>
+        <translation>Nada a Registrar</translation>
+    </message>
+    <message>
+        <source>Could not read the motor configuration from the board.</source>
+        <translation>Não foi possível ler a configuração do motor na placa.</translation>
+    </message>
+    <message>
+        <source>One calibration recorded. The next one will be compared against it.</source>
+        <translation>Uma calibração registrada. A próxima será comparada com ela.</translation>
+    </message>
+    <message>
+        <source>The winding is about {0:.0f} C {1} than at the previous calibration.</source>
+        <translation>O enrolamento está cerca de {0:.0f} C {1} do que na calibração anterior.</translation>
+    </message>
+    <message>
+        <source>warmer</source>
+        <translation>mais quente</translation>
+    </message>
+    <message>
+        <source>cooler</source>
+        <translation>mais frio</translation>
+    </message>
+    <message>
+        <source>A warm motor calibrates to a warm resistance, and every later run inherits it: it eats the voltage headroom and the magnets give up about {0:.1f}% of flux, so Kt reads low by that much. Let it cool and calibrate again.</source>
+        <translation>Um motor quente calibra para uma resistência quente, e toda execução posterior herda isso: consome a margem de tensão e os ímãs abrem mão de cerca de {0:.1f}% de fluxo, então o Kt sai baixo nessa medida. Deixe esfriar e calibre de novo.</translation>
+    </message>
+    <message>
+        <source>phase_inductance moved {0:.0f}%, {1:.0f} to {2:.0f} uH.</source>
+        <translation>A phase_inductance mudou {0:.0f}%, de {1:.0f} para {2:.0f} uH.</translation>
+    </message>
+    <message>
+        <source>encoder direction flipped, {0:.0f} to {1:.0f}. The motor will run backwards until this is sorted out.</source>
+        <translation>A direção do encoder inverteu, de {0:.0f} para {1:.0f}. O motor vai girar ao contrário até isso ser resolvido.</translation>
+    </message>
+    <message>
+        <source>{0} changed from {1:.0f} to {2:.0f}. This is a setting, not a measurement, so something rewrote it.</source>
+        <translation>{0} mudou de {1:.0f} para {2:.0f}. Isto é uma configuração, não uma medição, então algo a reescreveu.</translation>
+    </message>
+    <message>
+        <source>{0}: {1:.4g} to {2:.4g}.</source>
+        <translation>{0}: {1:.4g} para {2:.4g}.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
