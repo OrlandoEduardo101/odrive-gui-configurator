@@ -34,8 +34,28 @@ class AlignmentTab(BaseTab):
         self.align_worker = None
         self.centre_thread = None
         self.centre_worker = None
+        self._centre_lines = []
+        self.live_timer = QTimer(self)
+        self.live_timer.setInterval(500)
+        self.live_timer.timeout.connect(self._refresh_centre_position)
         self._setup_ui()
         self.retranslate_ui()
+
+    def showEvent(self, event):
+        """
+        Keeps the live readings live while the tab is on screen.
+
+        Position is the number you watch while lining the wheel up to set the centre, so
+        a figure frozen from whenever the board connected is worse than none. Polling
+        only while visible keeps it off the wire the rest of the time.
+        """
+        super().showEvent(event)
+        self.refresh_centre_status()
+        self.live_timer.start()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.live_timer.stop()
 
     def changeEvent(self, event):
         """Catches language change events to re-translate the UI."""
@@ -596,10 +616,33 @@ class AlignmentTab(BaseTab):
         except Exception:
             return 0.0
 
+    def _refresh_centre_position(self):
+        """
+        Updates only the position line.
+
+        The full check walks a dozen properties, and every one is a round trip over USB
+        that the telemetry worker is already competing for. Twice a second that is worth
+        avoiding, and the position is the only part that moves while someone lines the
+        wheel up.
+        """
+        odrv = self._quiet_odrv()
+        if odrv is None or not self._centre_lines:
+            return
+        try:
+            position = float(odrv.axis0.encoder.pos_estimate)
+        except Exception:
+            return
+        lines = list(self._centre_lines)
+        lines[0] = self.tr("Position now: {0:+.4f} turns ({1:+.1f}°)").format(
+            position, position * 360.0)
+        self._centre_lines = lines
+        self.centre_status.setText("\n".join(lines))
+
     def refresh_centre_status(self):
         """Describes where zero is and whether the axis will centre itself at power-on."""
         odrv = self._quiet_odrv()
         if odrv is None:
+            self._centre_lines = []
             self.centre_status.setText(self.tr("Connect to see the current centre."))
             self.centre_status.setStyleSheet("")
             for button in (self.mark_centre_btn, self.goto_centre_btn, self.autocentre_btn):
@@ -651,6 +694,8 @@ class AlignmentTab(BaseTab):
         else:
             lines.append(self.tr("It will find the index and move to centre at power-on."))
             self.centre_status.setStyleSheet(f"color: {AppColors.SUCCESS};")
+        # Kept so the cheap poll can replace the first line without walking the rest.
+        self._centre_lines = lines
         self.centre_status.setText("\n".join(lines))
 
     def _quiet_odrv(self):

@@ -84,7 +84,11 @@ class TuningContainer(BaseTab):
         Loads the sub-tabs that read from the board. Each is isolated so that one
         unsupported property cannot stop the others from populating.
         """
-        for widget in (self.kt_tab, self.safety_tab, self.preset_tab):
+        # Over ordered_tabs rather than a list written out here, which went stale: the
+        # alignment tab had nothing to read when this was written and was left out, so
+        # when it grew a centre panel and a calibration history they stayed blank and
+        # their buttons disabled while the board was plainly connected.
+        for widget in self.ordered_tabs():
             try:
                 widget.populate_fields()
             except Exception as e:
