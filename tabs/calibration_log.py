@@ -104,6 +104,21 @@ def append(entry):
     return entries
 
 
+def clear():
+    """
+    Removes the stored history. Returns how many entries went.
+
+    The file is deleted rather than emptied so nothing is left behind holding readings
+    from a motor that may since have been rebuilt.
+    """
+    entries = load()
+    try:
+        os.remove(history_path())
+    except OSError:
+        pass
+    return len(entries)
+
+
 def temperature_difference(previous_r, current_r):
     """
     Degrees the winding differs by, from the resistance two calibrations measured.

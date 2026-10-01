@@ -241,7 +241,10 @@ class AlignmentTab(BaseTab):
         row = QHBoxLayout()
         self.record_calib_btn = QPushButton()
         self.record_calib_btn.clicked.connect(self.record_calibration)
+        self.clear_history_btn = QPushButton()
+        self.clear_history_btn.clicked.connect(self.clear_history)
         row.addWidget(self.record_calib_btn)
+        row.addWidget(self.clear_history_btn)
         row.addStretch()
         layout.addLayout(row)
         return self.history_group
@@ -342,6 +345,10 @@ class AlignmentTab(BaseTab):
             self.tr("When"), self.tr("Resistance (Ω)"), self.tr("Inductance"),
             self.tr("Offset"), self.tr("Calib. current")])
         self.record_calib_btn.setText(self.tr("Record This Calibration"))
+        self.clear_history_btn.setText(self.tr("Clear History"))
+        self.clear_history_btn.setToolTip(self.tr(
+            "Throws the recorded calibrations away. Worth doing after the motor or encoder has "
+            "been rebuilt, when the old readings describe something that no longer exists."))
         self.record_calib_btn.setToolTip(self.tr(
             "Stores what the board holds now and compares it against the last recording."))
         self.refresh_history()
@@ -517,6 +524,33 @@ class AlignmentTab(BaseTab):
         previous = calibration_log.load()
         calibration_log.append(entry)
         self.refresh_history(previous[-1] if previous else None, entry)
+
+
+    def clear_history(self):
+        """
+        Throws the stored calibrations away, on confirmation.
+
+        Worth doing after the motor or the encoder has been rebuilt, when the old
+        readings describe something that no longer exists and comparing against them
+        would raise alarms about a difference that is only history.
+        """
+        entries = calibration_log.load()
+        if not entries:
+            self.history_verdict.setText(self.tr("There is nothing recorded to clear."))
+            self.history_verdict.setStyleSheet("")
+            return
+        if QMessageBox.question(self, self.tr("Clear History"), self.tr(
+                "Delete all {0} recorded calibrations?\n\nThe next one will have nothing to "
+                "be compared against, so the drift that shows a warm motor will not appear "
+                "until there are two again. This cannot be undone.").format(len(entries)),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                ) != QMessageBox.StandardButton.Yes:
+            return
+        removed = calibration_log.clear()
+        self.refresh_history()
+        self.history_verdict.setText(self.tr(
+            "Cleared {0} recorded calibrations.").format(removed))
+        self.history_verdict.setStyleSheet("")
 
     def refresh_history(self, previous=None, current=None):
         """Fills the table from the stored history and explains the latest change."""

@@ -3023,6 +3023,30 @@ A busca de índice continua ligada, então o centro que você guardou continua v
         <source>The same job the OpenFFBoard damper does, under the name ODrive gives it: vel_gain, torque against velocity. A direct drive wheel has no friction to settle it, so too little here and the move overshoots and oscillates just as the wheel does with the damper at zero. The stock 0.16 is far too little for a wheel&apos;s inertia. Raise it until the move is calm.</source>
         <translation>O mesmo trabalho que o damper do OpenFFBoard faz, sob o nome que a ODrive dá: vel_gain, torque contra velocidade. Um volante direct drive não tem atrito que o acomode, então pouco demais aqui e o movimento passa do ponto e oscila, igual ao volante com o damper em zero. O padrão 0,16 é pouquíssimo para a inércia de um aro. Aumente até o movimento ficar calmo.</translation>
     </message>
+    <message>
+        <source>Clear History</source>
+        <translation>Limpar Histórico</translation>
+    </message>
+    <message>
+        <source>Throws the recorded calibrations away. Worth doing after the motor or encoder has been rebuilt, when the old readings describe something that no longer exists.</source>
+        <translation>Descarta as calibrações registradas. Vale fazer depois de remontar o motor ou o encoder, quando as leituras antigas descrevem algo que não existe mais.</translation>
+    </message>
+    <message>
+        <source>There is nothing recorded to clear.</source>
+        <translation>Não há nada registrado para limpar.</translation>
+    </message>
+    <message>
+        <source>Delete all {0} recorded calibrations?
+
+The next one will have nothing to be compared against, so the drift that shows a warm motor will not appear until there are two again. This cannot be undone.</source>
+        <translation>Apagar todas as {0} calibrações registradas?
+
+A próxima não terá com o que ser comparada, então a deriva que denuncia um motor quente só volta a aparecer quando houver duas de novo. Isto não pode ser desfeito.</translation>
+    </message>
+    <message>
+        <source>Cleared {0} recorded calibrations.</source>
+        <translation>Limpas {0} calibrações registradas.</translation>
+    </message>
 </context>
 <context>
     <name>OffsetAlignmentWorker</name>
